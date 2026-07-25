@@ -8,7 +8,7 @@ export default function Home() {
   const invoke = useMutation(trpc.generateApp.mutationOptions())
   return (
    <div className="p-4 max-w-7xl">
-    <Button onClick={()=>{invoke.mutate({prompt:"myNameIsUsama"})}}>Invoke a background jop</Button>
+    <Button onClick={()=>{invoke.mutate({prompt:"myNameIsUsama"})}}>Invoke a background job</Button>
    </div>
   );
 }

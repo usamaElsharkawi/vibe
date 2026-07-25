@@ -5,11 +5,11 @@ export const processTask = inngest.createFunction(
   { id: "process-task", triggers: { event: "app/task.created" } },
   async ({ event, step }) => {
     const result = await step.run("handle-task", async () => {
-      return { processed: true, id: event.data.id };
+      return { processed: true, id: event.data.prompt };
     });
 
     await step.sleep("pause", "10s");
 
-    return { message: `Task ${event.data.id} complete`, result };
+    return { message: `Task complete`, result };
   },
 );
