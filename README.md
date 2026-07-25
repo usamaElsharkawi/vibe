@@ -73,6 +73,296 @@ Types flow from the database all the way to the frontend — no guessing what sh
 </details>
 
 <details>
+<summary><strong>⚙️ Background Jobs in AI Applications</strong></summary>
+
+## What Are Background Jobs?
+Background jobs are tasks that run **independently of the main application flow** — they execute in the background while your main application continues serving users.
+
+## Why AI Apps Can't Survive Without Them
+
+### The Timeout Problem
+```
+Browser timeout: 30-60 seconds
+AI operations: 30 seconds to 10+ minutes
+```
+
+**Without background jobs:**
+- User submits prompt → request blocks → browser times out → user sees error
+- Server continues working but nobody's listening
+- All progress lost when user retries
+
+**With background jobs:**
+- User submits prompt → immediate response "Processing..." → background job runs → result delivered when ready
+
+### AI Operations Are Slow and Unpredictable
+```
+Text generation: 5-30 seconds
+Image generation: 10-60 seconds
+Code generation: 30-120 seconds
+Video generation: 2-10 minutes
+```
+
+Same prompt can take different times due to:
+- API rate limiting
+- Network latency
+- Model load
+- Queue depth
+
+## The Architecture
+
+```
+┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│   User      │    │   Web App    │    │   Job Queue  │    │   Worker     │
+│             │    │              │    │              │    │              │
+│ Submits    │───>│ Receives     │───>│ Stores job   │───>│ Picks up     │
+│ prompt     │    │ request      │    │ in queue     │    │ job          │
+│             │    │              │    │              │    │              │
+│             │    │ Returns      │    │              │    │ Runs AI      │
+│             │<───│ "Processing" │    │              │    │ generation   │
+│             │    │ instantly    │    │              │    │ (2+ minutes) │
+│             │    │              │    │              │    │              │
+│             │    │              │    │              │    │ Saves result │
+│             │    │              │    │              │    │ to database  │
+└─────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
+```
+
+## Key Benefits for AI Applications
+
+### 1. **No Timeouts**
+- Request returns immediately
+- Job continues in background
+- User gets notification when complete
+
+### 2. **Progress Tracking**
+```javascript
+{
+  "jobId": "job_abc123",
+  "status": "processing",
+  "currentStep": 3,
+  "totalSteps": 5,
+  "message": "Generating React components..."
+}
+```
+
+### 3. **Retry Logic**
+- If AI API rate limits → auto-retry
+- If network fails → retry with backoff
+- If step fails → retry that specific step
+
+### 4. **Persistence**
+- Job survives server restarts
+- Progress saved to database
+- Can resume from last successful step
+
+### 5. **Cost Management**
+- Track cost per job
+- Budget limits per user
+- Queue prioritization
+
+## The Vibe Example
+
+### Without Background Jobs
+```
+User: "Create a todo app with authentication"
+    ↓
+Server starts (takes ~4.5 minutes):
+  1. Create project (10s)
+  2. Install deps (30s)
+  3. AI generate code (75s)
+  4. Start server (5s)
+  5. Wait for ready (10s)
+    ↓
+Browser timeout at 60s ❌
+User sees error
+Server finishes but nobody listening
+```
+
+### With Background Jobs
+```
+User: "Create a todo app with authentication"
+    ↓
+Server immediately returns:
+{
+  "jobId": "job_xyz789",
+  "status": "queued"
+}
+    ↓
+User sees progress page:
+  ⬜ Create project
+  ⬜ Install dependencies
+  ⬜ Generate authentication code
+  ⬜ Generate todo components
+  ⬜ Start server
+    ↓
+Background worker processes each step
+    ↓
+When complete:
+{
+  "status": "completed",
+  "previewUrl": "https://preview.vibe.dev/job_xyz789"
+}
+```
+
+## Why It's Critical for AI Apps
+
+AI operations have **inherent characteristics** that make background jobs essential:
+
+| Characteristic | Challenge | Background Job Solution |
+|----------------|-----------|------------------------|
+| **Slow** | Takes seconds/minutes | Decouple from request |
+| **Unpredictable** | Variable duration | Retry and timeout handling |
+| **Expensive** | API costs add up | Cost tracking and limits |
+| **Multi-step** | Pipeline of operations | Step-by-step execution |
+| **Stateful** | Need to track progress | Persistent job state |
+
+## The Bottom Line
+
+Background jobs transform AI applications from "impossible" to "usable":
+
+- **Without**: Requests timeout, users frustrated, no progress tracking
+- **With**: Instant feedback, reliable execution, progress visibility, retry logic
+
+This is why every serious AI platform (ChatGPT, Midjourney, GitHub Copilot) uses background jobs — it's not optional, it's **fundamental architecture**.
+
+</details>
+
+<details>
+<summary><strong>🛠️ Inngest Implementation</strong></summary>
+
+## What We Built
+
+### 1. Inngest Client (`src/inngest/client.ts`)
+```typescript
+import { Inngest } from "inngest";
+
+export const inngest = new Inngest({ id: "vibe-development" });
+```
+
+### 2. Inngest Function (`src/inngest/functions.ts`)
+```typescript
+import { inngest } from "./client";
+
+export const processTask = inngest.createFunction(
+  { id: "process-task", triggers: { event: "app/task.created" } },
+  async ({ event, step }) => {
+    const result = await step.run("handle-task", async () => {
+      return { processed: true, id: event.data.id };
+    });
+
+    await step.sleep("pause", "10s");
+
+    return { message: `Task ${event.data.id} complete`, result };
+  },
+);
+```
+
+### 3. API Route (`src/app/api/inngest/route.ts`)
+```typescript
+import { serve } from "inngest/next";
+import { inngest } from "../../../inngest/client";
+import { processTask } from "@/inngest/functions";
+
+export const { GET, POST, PUT } = serve({
+  client: inngest,
+  functions: [processTask],
+});
+```
+
+## Connecting to tRPC
+
+### Router (`src/trpc/routers/_app.ts`)
+```typescript
+generateApp: baseProcedure
+  .input(z.object({ prompt: z.string() }))
+  .mutation(async ({ input }) => {
+    await inngest.send({
+      name: "app/task.created",
+      data: {
+        prompt: input.prompt,  // ✅ Must be an object
+      },
+    });
+
+    return {
+      success: true,
+      message: "Job queued successfully",
+    };
+  }),
+```
+
+### Frontend Usage (`src/app/page.tsx`)
+```typescript
+const invoke = useMutation(trpc.generateApp.mutationOptions());
+
+// Trigger the job
+invoke.mutate({ prompt: "Create a todo app" });
+```
+
+## Common Pitfalls & Fixes
+
+### 1. Inngest Event Data Format
+```typescript
+// ❌ WRONG: Sending a string
+inngest.send({
+  name: "app/task.created",
+  data: input.prompt  // String, not object
+});
+
+// ✅ CORRECT: Sending an object
+inngest.send({
+  name: "app/task.created",
+  data: {
+    prompt: input.prompt  // Object with properties
+  }
+});
+```
+
+### 2. The 400 Bad Request Error
+When you see `POST http://localhost:3000/api/trpc/generateApp?batch=1 400 (Bad Request)`:
+
+**Cause:** The mutation handler throws an error (usually from Inngest rejecting malformed data), and tRPC converts it to a 400 response.
+
+**Fix:** Check the `data` field in `inngest.send()` — it must be an object, not a string or primitive.
+
+### 3. Missing `await`
+```typescript
+// ❌ Without await: Function might return before Inngest processes
+inngest.send({ name: "...", data: {...} });
+
+// ✅ With await: Ensures the event is sent before continuing
+await inngest.send({ name: "...", data: {...} });
+```
+
+## Inngest Dev Tools
+
+When running `npm run dev`, Inngest automatically starts a **dev server** at `http://localhost:8288` where you can:
+
+- View queued events
+- See function execution in real-time
+- Check logs and errors
+- Manually retry failed events
+- Inspect step-by-step progress
+
+## Key Concepts Recap
+
+| Concept | What It Is | Example |
+|---------|-----------|---------|
+| **Event** | Message that triggers a job | `{ name: "app/task.created", data: {...} }` |
+| **Function** | Background job definition | `inngest.createFunction(...)` |
+| **Step** | Discrete unit of work | `step.run("name", () => {...})` |
+| **Trigger** | What starts the function | `{ event: "app/task.created" }` |
+| **Sleep** | Pause execution | `step.sleep("pause", "10s")` |
+
+## Testing Your Setup
+
+1. Start dev server: `npm run dev`
+2. Visit `http://localhost:8288` (Inngest dev UI)
+3. Click your button in the app
+4. Watch the event appear in Inngest dev UI
+5. See the function execute step-by-step
+
+</details>
+
+<details>
 <summary><strong>🧭 tRPC Deep Dive</strong></summary>
 
 ## What is tRPC?
@@ -118,7 +408,7 @@ const trpc = useTRPC();
 const { data } = trpc.hello.useQuery({ text: 'World' });
 ```
 
-### 2 vs 3 - Key Distinction
+### Server vs Client - Key Distinction
 
 | Feature | Server Component | Client Component |
 |---------|-----------------|------------------|
