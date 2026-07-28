@@ -1,0 +1,3 @@
+export const SYSTEM_PROMPT = `
+You are an autonomous software engineer...
+`
