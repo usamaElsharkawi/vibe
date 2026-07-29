@@ -13,5 +13,9 @@ export { createGeminiModel, isGeminiConfigured, googleProvider } from "./provide
 export { createOpenRouterModel, isOpenRouterConfigured, openrouterProvider } from "./providers/openrouter";
 export { createOpenAIModel, isOpenAIConfigured, openaiProvider } from "./providers/openai";
 
-// Also export registry so manual registration can be performed when app boots.
-export { registerProvider, registerProvider as registerProviders } from "./router/register-providers";
+// Also export registry helpers and built-in provider registration for bootstrap.
+export {
+  registerBuiltInProviders,
+  registerProvider,
+  registerProvider as registerProviders,
+} from "./router/register-providers";

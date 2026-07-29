@@ -5,6 +5,7 @@ import {
   listRegisteredProviders,
   type Provider,
 } from "./provider-registry";
+import { ensureBuiltInProvidersRegistered } from "./register-providers";
 
 export type ModelRouterEnvironment = "development" | "production";
 
@@ -24,6 +25,9 @@ export class ModelRouter {
 
     // Load policy for environment. Policy contains provider order and model preferences.
     const policy: ModelPolicy = getPolicyForEnvironment(environment);
+
+    // Ensure built-in providers are registered before the router attempts to resolve them.
+    ensureBuiltInProvidersRegistered();
 
     // Request providers from registry in the order defined by the policy.
     const providers: Provider[] = getProvidersByNames(policy.providerOrder);
