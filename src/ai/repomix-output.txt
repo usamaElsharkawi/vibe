@@ -1,0 +1,349 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+
+================================================================
+Directory Structure
+================================================================
+agent/
+  coding-agent.ts
+prompts/
+  fixer.ts
+  generator.ts
+  planner.ts
+  review.ts
+  system.ts
+providers/
+  google.ts
+  openrouter.ts
+router/
+  model-router.ts
+schemas/
+  file.ts
+  project.ts
+  tool.ts
+tools/
+  index.ts
+index.ts
+
+================================================================
+Files
+================================================================
+
+================
+File: agent/coding-agent.ts
+================
+//This is where ToolLoopAgent will live.
+
+// This is where the AI SDK foundation from the docs belongs.
+
+// Conceptually, it should:
+
+// Ask the router for a model.
+// Import the system prompt.
+// Import the tools.
+// Construct a single ToolLoopAgent.
+
+// That's the only responsibility of this file.
+
+================
+File: prompts/fixer.ts
+================
+
+
+================
+File: prompts/generator.ts
+================
+
+
+================
+File: prompts/planner.ts
+================
+
+
+================
+File: prompts/review.ts
+================
+
+
+================
+File: prompts/system.ts
+================
+export const SYSTEM_PROMPT = `
+You are an autonomous software engineer...
+`
+
+================
+File: providers/google.ts
+================
+import { createGoogle } from "@ai-sdk/google";
+import type { LanguageModelV4 } from "@ai-sdk/provider";
+
+export const GEMINI_DEFAULT_MODEL = "gemini-3.5-flash-lite";
+
+const GOOGLE_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+export function isGeminiConfigured(): boolean {
+  return typeof GOOGLE_API_KEY === "string" && GOOGLE_API_KEY.trim().length > 0;
+}
+
+export function createGeminiModel(): LanguageModelV4 | null {
+  if (!isGeminiConfigured()) {
+    return null;
+  }
+
+  const google = createGoogle({
+    apiKey: GOOGLE_API_KEY,
+    name: "google.generative-ai",
+  });
+
+  return google.chat(GEMINI_DEFAULT_MODEL);
+}
+
+================
+File: providers/openrouter.ts
+================
+import { createOpenAI } from "@ai-sdk/openai";
+import type { LanguageModelV4 } from "@ai-sdk/provider";
+
+export const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/v1";
+export const OPENROUTER_FREE_MODEL_PREFERENCES = [
+  "qwen-7b",
+  "deepseek-3b",
+  "gemma-3-1b",
+  "llama-2-7b",
+] as const;
+
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL?.trim() || OPENROUTER_DEFAULT_BASE_URL;
+
+export function isOpenRouterConfigured(): boolean {
+  return typeof OPENROUTER_API_KEY === "string" && OPENROUTER_API_KEY.trim().length > 0;
+}
+
+function createOpenRouterProvider() {
+  if (!isOpenRouterConfigured()) {
+    return null;
+  }
+
+  return createOpenAI({
+    apiKey: OPENROUTER_API_KEY,
+    baseURL: OPENROUTER_BASE_URL,
+    name: "openrouter",
+  });
+}
+
+export function createOpenRouterModel(modelId: string): LanguageModelV4 | null {
+  const provider = createOpenRouterProvider();
+  if (!provider) {
+    return null;
+  }
+
+  return provider.chat(modelId as string);
+}
+
+================
+File: router/model-router.ts
+================
+import { createOpenAI } from "@ai-sdk/openai";
+import type { LanguageModelV4 } from "@ai-sdk/provider";
+import { createGeminiModel, isGeminiConfigured } from "../providers/google";
+import {
+  createOpenRouterModel,
+  isOpenRouterConfigured,
+  OPENROUTER_FREE_MODEL_PREFERENCES,
+} from "../providers/openrouter";
+
+export type ModelRouterEnvironment = "development" | "production";
+
+export interface ModelRouterContext {
+  environment?: ModelRouterEnvironment;
+}
+
+const OPENAI_DEFAULT_MODEL = "gpt-4o-mini";
+const OPENAI_PROVIDER_NAME = "openai";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+function resolveEnvironment(context?: ModelRouterContext): ModelRouterEnvironment {
+  if (context?.environment === "production") {
+    return "production";
+  }
+
+  if (context?.environment === "development") {
+    return "development";
+  }
+
+  return process.env.NODE_ENV === "production" ? "production" : "development";
+}
+
+
+function isOpenAIConfigured(): boolean {
+  return typeof OPENAI_API_KEY === "string" && OPENAI_API_KEY.trim().length > 0;
+}
+
+function createOpenAIModel(): LanguageModelV4 | null {
+  if (!isOpenAIConfigured()) {
+    return null;
+  }
+
+  const openai = createOpenAI({
+    apiKey: OPENAI_API_KEY,
+    name: OPENAI_PROVIDER_NAME,
+  });
+
+  return openai.chat(OPENAI_DEFAULT_MODEL);
+}
+
+export class ModelRouter {
+  async getModel(context?: ModelRouterContext): Promise<LanguageModelV4> {
+    const environment = resolveEnvironment(context);
+
+    const orderedProviders =
+      environment === "production"
+        ? [this.tryOpenAIModel, this.tryOpenRouterModel, this.tryGeminiModel]
+        : [this.tryGeminiModel, this.tryOpenRouterModel];
+
+    const errors: Array<Error | string> = [];
+
+    for (const provider of orderedProviders) {
+      try {
+        const model = provider.call(this);
+        if (model) {
+          return model;
+        }
+      } catch (error) {
+        errors.push(error instanceof Error ? error : String(error));
+      }
+    }
+
+    const errorDetail = errors.length > 0 ? ` (${errors.join("; ")})` : "";
+    throw new Error(
+      `ModelRouter could not select a model for environment '${environment}'.` +
+        errorDetail,
+    );
+  }
+
+  private tryGeminiModel(): LanguageModelV4 | null {
+    if (!isGeminiConfigured()) {
+      return null;
+    }
+
+    return createGeminiModel();
+  }
+
+  private tryOpenRouterModel(): LanguageModelV4 | null {
+    if (!isOpenRouterConfigured()) {
+      return null;
+    }
+
+    for (const modelId of OPENROUTER_FREE_MODEL_PREFERENCES) {
+      const model = createOpenRouterModel(modelId);
+      if (model) {
+        return model;
+      }
+    }
+
+    return null;
+  }
+
+  private tryOpenAIModel(): LanguageModelV4 | null {
+    if (!isOpenAIConfigured()) {
+      return null;
+    }
+
+    return createOpenAIModel();
+  }
+}
+
+================
+File: schemas/file.ts
+================
+
+
+================
+File: schemas/project.ts
+================
+
+
+================
+File: schemas/tool.ts
+================
+
+
+================
+File: tools/index.ts
+================
+export const tools = {}
+
+// Later we'll export:
+
+// writeFile
+// readFile
+// runCommand
+// done
+// etc.
+
+// The docs encourage passing a tools object to the agent, so having a central export fits naturally.
+
+================
+File: index.ts
+================
+// This becomes the public AI public API.
+
+// Instead of importing deeply:
+
+// import { codingAgent } from "@/ai/agent/coding-agent";
+
+// everywhere else, export it from here so consumers can simply import from @/ai.
+
+export { ModelRouter } from "./router/model-router";
+export { createGeminiModel, isGeminiConfigured } from "./providers/google";
+export { createOpenRouterModel, OPENROUTER_FREE_MODEL_PREFERENCES, isOpenRouterConfigured } from "./providers/openrouter";
+
+
+
+
+
+================================================================
+End of Codebase
+================================================================
