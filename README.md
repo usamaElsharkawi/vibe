@@ -1052,6 +1052,8 @@ This means we no longer need a dedicated agent framework.
 
 ---
 
+</details>
+
 # Final Architecture
 
 <details>
@@ -4015,8 +4017,6 @@ Only the Model Router knows this.
 > We are building an autonomous coding platform where the **agent**, **model provider**, **execution environment**, and **background orchestration** are all independent, replaceable layers.
 >
 > This modular architecture makes Vibe easier to maintain, cheaper to develop, and ready to adopt future AI models with minimal changes.
-
-</details>
 
 ---
 
