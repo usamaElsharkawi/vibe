@@ -629,6 +629,368 @@ git push --force-with-lease  # Safe force push
 
 
 <details>
+<summary><strong>🧩 Design Patterns</strong></summary>
+
+# Design Patterns
+
+As Vibe grows, certain reusable design patterns emerge in the code. This section documents them so we can recognize them on sight — and apply them deliberately rather than by accident.
+
+> This section documents the two patterns that power our Model Router: the **Registry** (how we hide providers behind a single lookup point) and the **Strategy** (how we make routing rules swappable per environment). Together they form our "Policy-Driven Failover."
+
+---
+
+## The Registry Pattern
+
+### What Is a Registry?
+
+> "A well-known object that other objects use to find common objects or services." — Martin Fowler
+
+A Registry is a **known lookup point**. Instead of every part of the codebase holding direct references to the things it needs, those things are placed into a single shared store, and anyone who needs them asks that store by name.
+
+> **Note on naming:** The Registry is a recognized pattern (documented by Martin Fowler and in enterprise architecture literature), though it is **not** one of the original "Gang of Four" (1994) patterns. It is most commonly implemented as a key-value store (a `Map`), but its identity comes from its **role** — a known place to look things up — not from any specific data structure.
+
+---
+
+### The Problem It Solves
+
+**Without a registry**, every consumer is coupled to specific implementations:
+
+```
+agent ──imports──► GoogleProvider
+agent ──imports──► OpenRouterProvider
+agent ──imports──► OpenAIProvider
+```
+
+Swapping or adding a provider means editing every consumer. The codebase becomes rigid.
+
+**With a registry**, there is one known place to ask:
+
+```
+agent ──asks──► Registry ──holds──► { Google, OpenRouter, OpenAI, ... }
+```
+
+Consumers ask by name. The registry hides *which specific objects* exist. Adding a new one no longer touches the consumers.
+
+---
+
+### The Two Actors
+
+Every registry has exactly two kinds of participants:
+
+| Actor | Responsibility | In our code | When it acts |
+| --- | --- | --- | --- |
+| **The Registrar** (writer) | Builds objects and puts them *into* the registry | `router/register-providers.ts` | Once, at app startup |
+| **The Consumer** (reader) | Asks the registry for objects *by name* | `router/model-router.ts` | On every `getModel()` request |
+
+The split is the whole point. The consumer never imports the things it looks up — it imports only the registry.
+
+---
+
+### Is a Registry Always a Key-Value Store?
+
+**No — but it usually is.**
+
+A Registry is defined by its **role** (a known lookup point), not its data structure. It *could* be a list you scan, or a more complex structure. In practice, a key-value store (a `Map`) is used the vast majority of the time because lookups by name are fast and natural.
+
+So treat **key-value as the default shape, not a law**. What makes something a Registry is that it is *the* well-known place to find things — not that it happens to be a `Map`.
+
+---
+
+### Our Implementation: `src/ai/router/provider-registry.ts`
+
+This file is our registry. It is small on purpose — a registry should stay a thin lookup layer, never a logic layer.
+
+**① The shape of a registered thing**
+
+Before anything can be stored, we define what a "registered thing" looks like. For us, that is a `Provider`:
+
+```ts
+export type Provider = {
+  name: ProviderName;                       // the KEY — how we'll find it later
+  isConfigured: () => boolean;              // is this provider usable right now?
+  getModel: () => ProviderResult | null;    // give me a model from it
+};
+```
+
+Every provider (Google, OpenRouter, OpenAI) implements this exact shape. The registry does not care about the differences between them — only that they share this contract.
+
+**② The store**
+
+The registry itself is a single module-scoped `Map`:
+
+```ts
+const registry = new Map<string, Provider>();
+```
+
+Because it lives at module scope, **only one instance exists** for the whole app. Anyone who imports this module shares that same map. That is what "well-known" means in code.
+
+**③ Write — register (something puts things in)**
+
+```ts
+export function registerProvider(provider: Provider) {
+  if (!provider || !provider.name) return;
+  registry.set(provider.name, provider);   // key = name, value = provider
+}
+```
+
+Called once per provider during bootstrap. The guard (`if (!provider || !provider.name)`) silently ignores bad input rather than crashing — defensive, because a startup crash over a misconfigured provider would be a poor experience.
+
+**④ Read — look up (someone gets things out)**
+
+```ts
+export function getProvider(name: ProviderName): Provider | undefined {
+  return registry.get(name);   // single lookup by key
+}
+
+export function getProvidersByNames(names: ProviderName[]): Provider[] {
+  return names
+    .map((n) => registry.get(n))   // turn each name → its Provider
+    .filter((p): p is Provider => typeof p !== "undefined");
+    //        ↑ quietly drop any name that wasn't registered,
+    //          instead of letting `undefined` leak into callers
+}
+
+export function listRegisteredProviders(): string[] {
+  return Array.from(registry.keys());   // used for debugging & error messages
+}
+```
+
+`getProvidersByNames` is the function our router actually calls: it takes an *ordered list of names* (from the policy) and resolves them to real `Provider` objects, skipping any that aren't registered.
+
+---
+
+### The Decoupling It Buys Us
+
+This is the payoff. Look at who imports whom:
+
+```
+register-providers.ts ──imports──► google.ts, openrouter.ts, openai.ts
+        │ (writes them in)
+        ▼
+   provider-registry.ts  ◄──reads── model-router.ts
+```
+
+**The router imports the registry, NOT the providers.** Search `model-router.ts` and you will find zero `import { googleProvider }`. The router says: "give me whatever is registered under the name `'google'`."
+
+That means:
+
+- **Add a provider** (e.g. `groq.ts`) → register it in `register-providers.ts` → the router works with it automatically. **Router code unchanged.**
+- **Swap a provider** (replace Google with xAI) → change the registration → **router code unchanged.**
+- **Remove a provider** → stop registering it → **router code unchanged.**
+
+The router is closed for modification, but open for extension. That is the **Open/Closed Principle**, made real by the Registry.
+
+---
+
+### The Mental Test
+
+Whenever you look at a registry, ask yourself:
+
+> *"If I add a new thing, does the code that **looks things up** have to change?"*
+
+- **No** → it is a healthy registry. ✅
+- **Yes** → the consumer is hardcoded to specific names/instances, and the abstraction is leaking.
+
+For our registry: adding `groqProvider` changes `register-providers.ts` only. `model-router.ts` (the consumer) never changes. ✅
+
+---
+
+### Why We Use It in Vibe
+
+The Model Router's central promise is: **the rest of the app never knows which provider is active.** The Registry is what makes that promise keepable.
+
+By hiding all providers behind a single lookup point, the router can select among them by name (driven by a policy) without ever importing a specific SDK. Provider-agnosticism is not a hope — it is a structural consequence of using a Registry.
+
+---
+
+### Key Takeaways
+
+- A **Registry** is a well-known object that other objects use to *find* common objects or services.
+- It is defined by its **role** (a known lookup point), not its data structure — though a key-value `Map` is the common implementation.
+- It always has two actors: a **Registrar** (writes once at startup) and a **Consumer** (reads by key on demand).
+- The consumer imports the **registry**, never the things inside it — that decoupling is the entire benefit.
+- The test of a healthy registry: **adding a new entry must not change the consumer.**
+- In Vibe, the Registry makes the Model Router provider-agnostic.
+
+---
+
+## The Strategy Pattern
+
+### What Is the Strategy Pattern?
+
+> "Define a family of algorithms, encapsulate each one, and make them interchangeable. Strategy lets the algorithm vary independently from clients that use it." — Gang of Four (1994)
+
+Strategy is about **pulling a behavior out of a class** and giving it its own object, behind a shared interface — so the behavior can be **swapped, added, or changed without touching the code that uses it**.
+
+It rests on three connected insights.
+
+---
+
+### The Three Core Insights
+
+#### 1. Composition rather than inheritance
+
+The principle behind the pattern:
+
+> "Favor object composition over class inheritance."
+
+- **Inheritance** is an **IS-A** relationship (`Dog extends Animal` → "a Dog *is an* Animal"). The bond is **permanent and compile-time** — once `extends` is written, it cannot change at runtime.
+- **Composition** is a **HAS-A** relationship (`class Dog { constructor(private mover: MoveBehavior) }` → "a Dog *has a* mover"). The bond is **dynamic** — the referenced object can be **swapped at runtime**.
+
+Strategy chooses composition: instead of baking the behavior into the class by extending a superclass, the behavior is pulled **out** into its own object and handed in as a reference. The behavior becomes a **plug-in component**, not a baked-in feature.
+
+#### 2. Inheritance is not about reuse
+
+The deepest insight, and the one most people get wrong. Many developers reach for inheritance thinking: *"If `AdminUser extends User`, I reuse `User`'s code for free."* They use inheritance as a **code-copy machine**.
+
+The GoF book pushes back: **inheritance is about establishing a type relationship (subtyping + polymorphism), not about scooping up code.** Code reuse is a *side effect*, not the *purpose*. Using inheritance *primarily* for reuse hits a wall.
+
+The wall — objects that need to sort differently. The inheritance-for-reuse route:
+
+```
+User
+ ├── UserByName      (sorts by name)
+ ├── UserByEmail     (sorts by email)
+ └── UserByDate      (sorts by date)
+```
+
+Problems erupt:
+
+- **Rigid** — the sorting is permanently welded to the class; a `UserByName` can never sort by email.
+- **Can't combine** — "sort by name *then* email" needs a new `UserByNameThenEmail` class → a combinatorial **class explosion**.
+- **Fragile base class** — change `User` and every subclass may break.
+- **Locked at compile time** — the behavior was chosen when `extends` was written and cannot change while the program runs.
+
+The composition version of the same need:
+
+```
+class User {
+  sortStrategy: SortStrategy        // ← a reference, swappable
+}
+
+interface SortStrategy { sort(items): Item[] }
+class SortByName  implements SortStrategy { ... }
+class SortByEmail implements SortStrategy { ... }
+class SortByDate  implements SortStrategy { ... }
+```
+
+Now the `User` sorts by name now and by email 5 seconds later — **just swap the strategy object**. Adding `SortByAge` is one new class; `User` doesn't change. The behavior **varies independently** from `User`.
+
+#### 3. The algorithm varies independently from the client that uses it
+
+This is the GoF's intent statement, almost verbatim. Parse it:
+
+- **"the algorithm"** = the behavior that might need to change.
+- **"varies independently"** = you can change, add, or remove it **without touching** anything else.
+- **"clients that use it"** = the code that *consumes* the algorithm.
+
+> **I should be able to add, remove, or rewrite the algorithm WITHOUT opening the file of the code that uses it.**
+
+The two sides are **decoupled** — they vary on separate tracks and meet only through the **shared interface** (the Strategy contract). This is the **Open/Closed Principle** again: the client is *closed* (unchanged), the algorithms are *open* (extendable), the interface is the hinge.
+
+### Our Implementation: `src/ai/policies/`
+
+Every piece of Strategy maps onto our code:
+
+| Strategy concept | In our code |
+| --- | --- |
+| **The Strategy interface** (the shared contract) | `ModelPolicy` type |
+| **A concrete Strategy** (one specific algorithm) | `developmentPolicy`, `productionPolicy` |
+| **The Client** (the code that uses a strategy) | `ModelRouter.getRoutingResult()` |
+| **Selection of which strategy** | `getPolicyForEnvironment(env)` |
+| **The "algorithm"** | the ordered list of providers to try — `providerOrder` |
+
+The key code, condensed:
+
+```ts
+// ── THE STRATEGY INTERFACE (the contract all strategies share) ──
+export type ModelPolicy = {
+  name: string;
+  providerOrder: ProviderName[];   // ← the "algorithm": ordered providers to try
+};
+
+// ── CONCRETE STRATEGY A ──
+export const developmentPolicy: ModelPolicy = {
+  name: "development",
+  providerOrder: [PROVIDERS.GOOGLE, PROVIDERS.OPENROUTER],   // free-first
+};
+
+// ── CONCRETE STRATEGY B ──
+export const productionPolicy: ModelPolicy = {
+  name: "production",
+  providerOrder: [PROVIDERS.OPENAI, PROVIDERS.OPENROUTER, PROVIDERS.GOOGLE],
+};
+```
+
+The client (`model-router.ts`) uses whichever strategy it is handed:
+
+```ts
+async getRoutingResult(context?) {
+  const env = resolveEnvironment(context);
+  const policy = getPolicyForEnvironment(env);             // ← gets A strategy
+  const providers = getProvidersByNames(policy.providerOrder); // ← walks ITS order
+  for (const prov of providers) { ... }                   // ← the loop is identical
+}
+```
+
+Apply the three insights to this real code:
+
+- **Composition, not inheritance** — `ModelRouter` does **not** extend a `DevelopmentRouter` / `ProductionRouter`. It *holds* a policy object (composition). The router *has a* policy; it isn't *a* policy.
+- **Inheritance is not about reuse** — the bad version would be `DevelopmentModelRouter extends ModelRouter`, `ProductionModelRouter extends ModelRouter`, each overriding `providerOrder`. Every environment would mean a new subclass, with router logic locked into the hierarchy. We avoided all that by pulling `providerOrder` into a **plain data object** selected at runtime. The router is *one* class.
+- **The algorithm varies independently** — proven next.
+
+---
+
+### The Decoupling It Buys Us
+
+Add a `stagingPolicy`. What changes?
+
+- `policies/staging.ts` → new file ✅ (the algorithm varies)
+- `policies/index.ts` → register it in the selector ✅
+- `router/model-router.ts` → **NOTHING. The client is untouched.** ✅
+
+The algorithm changed on its track; the client stayed on its track; they meet only through the `ModelPolicy` interface. That is the independence, made visible.
+
+---
+
+### The Mental Test
+
+Whenever you look at a Strategy, ask:
+
+> *"Can I add a new algorithm without touching the client?"*
+
+- **No** → the client is hardcoded to a specific algorithm; the pattern isn't doing its job.
+- **Yes** → it is a healthy Strategy. ✅
+
+For our router: adding `stagingPolicy` changes `policies/` only. `ModelRouter` never changes. ✅
+
+---
+
+### Why We Use It in Vibe
+
+*Which providers to try, and in what order* is a decision that differs per environment (development wants free-first; production wants reliable-first) and may evolve over time. By making it a **Strategy**, that decision lives in its own swappable objects behind the `ModelPolicy` interface.
+
+So we can change the order for an existing environment, invent a whole new routing strategy (e.g. cost-aware, capability-based), or add a new environment (`staging`) — **without the `ModelRouter` ever knowing.** The router stays a single, stable class; the routing rules grow on a separate track.
+
+Together, **Registry** (hide the providers behind one lookup point) + **Strategy** (make the routing rules swappable) are the two ingredients of our "Policy-Driven Failover": the Strategy decides *which providers to try in what order*, and the Registry *resolves those names to real provider objects*. The router just walks the Strategy's order using the Registry.
+
+---
+
+### Key Takeaways
+
+- **Strategy** defines a family of interchangeable algorithms behind a shared interface, letting the algorithm vary independently from the client that uses it.
+- It favors **composition** (HAS-A, swappable) over **inheritance** (IS-A, permanent).
+- **Inheritance is about type relationships, not code reuse** — using it for reuse causes rigidity, class explosion, and fragile base classes.
+- The **client** stays unchanged when algorithms are added or swapped; they meet only through the interface (Open/Closed Principle).
+- The test of a healthy Strategy: **adding a new algorithm must not touch the client.**
+- In Vibe, the **routing order per environment** is a Strategy (`policies/`), so routing rules can grow without changing `ModelRouter`.
+
+---
+
+</details>
+
+
+<details>
 <summary><strong>🏗️ Major Architectural Shift: Building a Provider-Agnostic Autonomous Coding Agent</strong></summary>
 
 # Why We Changed the Architecture

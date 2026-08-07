@@ -1,0 +1,552 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+
+================================================================
+Directory Structure
+================================================================
+agent/
+  coding-agent.ts
+constants/
+  environment.ts
+  models.ts
+  providers.ts
+policies/
+  development.ts
+  index.ts
+  production.ts
+prompts/
+  fixer.ts
+  generator.ts
+  planner.ts
+  review.ts
+  system.ts
+providers/
+  google.ts
+  openai.ts
+  openrouter.ts
+router/
+  model-router.ts
+  provider-registry.ts
+  register-providers.ts
+schemas/
+  file.ts
+  project.ts
+  tool.ts
+tools/
+  index.ts
+index.ts
+
+================================================================
+Files
+================================================================
+
+================
+File: agent/coding-agent.ts
+================
+//This is where ToolLoopAgent will live.
+
+// This is where the AI SDK foundation from the docs belongs.
+
+// Conceptually, it should:
+
+// Ask the router for a model.
+// Import the system prompt.
+// Import the tools.
+// Construct a single ToolLoopAgent.
+
+// That's the only responsibility of this file.
+
+================
+File: constants/environment.ts
+================
+export const ENVIRONMENTS = {
+  DEVELOPMENT: "development",
+  PRODUCTION: "production",
+} as const;
+
+export type Environment = (typeof ENVIRONMENTS)[keyof typeof ENVIRONMENTS];
+
+================
+File: constants/models.ts
+================
+export const OPENAI_MODELS = {
+  DEFAULT: "gpt-4o-mini",
+} as const;
+
+export const OPENROUTER_MODELS = {
+  PRIMARY: "qwen-7b",
+  FALLBACK_1: "deepseek-3b",
+  FALLBACK_2: "gemma-3-1b",
+  FALLBACK_3: "llama-2-7b",
+} as const;
+
+export const GEMINI_MODELS = {
+  DEFAULT: "gemini-3.5-flash-lite",
+} as const;
+
+export const OPENROUTER_FALLBACK_MODELS = [
+  OPENROUTER_MODELS.PRIMARY,
+  OPENROUTER_MODELS.FALLBACK_1,
+  OPENROUTER_MODELS.FALLBACK_2,
+  OPENROUTER_MODELS.FALLBACK_3,
+] as const;
+
+================
+File: constants/providers.ts
+================
+export const PROVIDERS = {
+  GOOGLE: "google",
+  OPENROUTER: "openrouter",
+  OPENAI: "openai",
+} as const;
+
+export type ProviderName = (typeof PROVIDERS)[keyof typeof PROVIDERS];
+
+================
+File: policies/development.ts
+================
+import type { ModelPolicy } from "./index";
+import { PROVIDERS } from "../constants/providers";
+
+export const developmentPolicy: ModelPolicy = {
+  name: "development",
+  // Provider order is the canonical ordering the router should try.
+  providerOrder: [PROVIDERS.GOOGLE, PROVIDERS.OPENROUTER],
+};
+
+================
+File: policies/index.ts
+================
+import { developmentPolicy } from "./development";
+import { productionPolicy } from "./production";
+import { ENVIRONMENTS, type Environment } from "../constants/environment";
+import type { ProviderName } from "../constants/providers";
+
+export type ModelPolicy = {
+  name: string;
+  providerOrder: ProviderName[]; // ordered list of provider names
+};
+
+export function getPolicyForEnvironment(env: Environment | undefined): ModelPolicy {
+  const environment = env === ENVIRONMENTS.PRODUCTION ? ENVIRONMENTS.PRODUCTION : ENVIRONMENTS.DEVELOPMENT;
+  return environment === ENVIRONMENTS.PRODUCTION ? productionPolicy : developmentPolicy;
+}
+
+export { developmentPolicy, productionPolicy };
+
+================
+File: policies/production.ts
+================
+import type { ModelPolicy } from "./index";
+import { PROVIDERS } from "../constants/providers";
+
+export const productionPolicy: ModelPolicy = {
+  name: "production",
+  // Production prefers higher-quality providers first.
+  providerOrder: [PROVIDERS.OPENAI, PROVIDERS.OPENROUTER, PROVIDERS.GOOGLE],
+};
+
+================
+File: prompts/fixer.ts
+================
+
+
+================
+File: prompts/generator.ts
+================
+
+
+================
+File: prompts/planner.ts
+================
+
+
+================
+File: prompts/review.ts
+================
+
+
+================
+File: prompts/system.ts
+================
+export const SYSTEM_PROMPT = `
+You are an autonomous software engineer...
+`
+
+================
+File: providers/google.ts
+================
+import { createGoogle } from "@ai-sdk/google";
+import type { Provider } from "../router/provider-registry";
+import { PROVIDERS } from "../constants/providers";
+import { GEMINI_MODELS } from "../constants/models";
+
+const GOOGLE_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+
+export function isGeminiConfigured(): boolean {
+  return typeof GOOGLE_API_KEY === "string" && GOOGLE_API_KEY.trim().length > 0;
+}
+
+function createGoogleProviderInstance() {
+  return createGoogle({
+    apiKey: GOOGLE_API_KEY,
+    name: "google.generative-ai",
+  });
+}
+
+export const googleProvider: Provider = {
+  name: PROVIDERS.GOOGLE,
+  isConfigured: () => isGeminiConfigured(),
+  getModel: () => {
+    if (!isGeminiConfigured()) return null;
+    const inst = createGoogleProviderInstance();
+    return {
+      model: inst.chat(GEMINI_MODELS.DEFAULT),
+      modelId: GEMINI_MODELS.DEFAULT,
+    };
+  },
+};
+
+// Backwards-compat helper function kept so external callers don't break.
+export function createGeminiModel() {
+  return googleProvider.getModel()?.model ?? null;
+}
+
+================
+File: providers/openai.ts
+================
+import { createOpenAI } from "@ai-sdk/openai";
+import type { Provider } from "../router/provider-registry";
+import { PROVIDERS } from "../constants/providers";
+import { OPENAI_MODELS } from "../constants/models";
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+export function isOpenAIConfigured(): boolean {
+  return typeof OPENAI_API_KEY === "string" && OPENAI_API_KEY.trim().length > 0;
+}
+
+function createOpenAIProviderInstance() {
+  if (!isOpenAIConfigured()) return null;
+  return createOpenAI({
+    apiKey: OPENAI_API_KEY,
+    name: "openai",
+  });
+}
+
+export const openaiProvider: Provider = {
+  name: PROVIDERS.OPENAI,
+  isConfigured: () => isOpenAIConfigured(),
+  getModel: () => {
+    const inst = createOpenAIProviderInstance();
+    if (!inst) return null;
+
+    return {
+      model: inst.chat(OPENAI_MODELS.DEFAULT),
+      modelId: OPENAI_MODELS.DEFAULT,
+    };
+  },
+};
+
+// Backwards-compat helper function kept so external callers don't break.
+export function createOpenAIModel() {
+  return openaiProvider.getModel()?.model ?? null;
+}
+
+================
+File: providers/openrouter.ts
+================
+import { createOpenAI } from "@ai-sdk/openai";
+import type { Provider } from "../router/provider-registry";
+import { PROVIDERS } from "../constants/providers";
+import { OPENROUTER_FALLBACK_MODELS } from "../constants/models";
+
+export const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/v1";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL?.trim() || OPENROUTER_DEFAULT_BASE_URL;
+
+export function isOpenRouterConfigured(): boolean {
+  return typeof OPENROUTER_API_KEY === "string" && OPENROUTER_API_KEY.trim().length > 0;
+}
+
+function createOpenRouterProviderInstance() {
+  if (!isOpenRouterConfigured()) return null;
+  return createOpenAI({
+    apiKey: OPENROUTER_API_KEY,
+    baseURL: OPENROUTER_BASE_URL,
+    name: "openrouter",
+  });
+}
+
+export const openrouterProvider: Provider = {
+  name: PROVIDERS.OPENROUTER,
+  isConfigured: () => isOpenRouterConfigured(),
+  getModel: () => {
+    const inst = createOpenRouterProviderInstance();
+    if (!inst) return null;
+
+    for (const modelId of OPENROUTER_FALLBACK_MODELS) {
+      try {
+        return {
+          model: inst.chat(modelId),
+          modelId,
+        };
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  },
+};
+
+// Backwards-compat helper function kept so external callers don't break.
+export function createOpenRouterModel(modelId: string) {
+  const inst = createOpenRouterProviderInstance();
+  if (!inst) return null;
+  return inst.chat(modelId);
+}
+
+================
+File: router/model-router.ts
+================
+import type { LanguageModelV4 } from "@ai-sdk/provider";
+import { getPolicyForEnvironment, type ModelPolicy } from "../policies";
+import {
+  getProvidersByNames,
+  listRegisteredProviders,
+  type Provider,
+} from "./provider-registry";
+import { ENVIRONMENTS, type Environment } from "../constants/environment";
+
+export type ModelRouterEnvironment = Environment;
+
+export interface ModelRouterContext {
+  environment?: ModelRouterEnvironment;
+}
+
+export type RoutingResult = {
+  model: LanguageModelV4;
+  provider: string;
+  modelId?: string;
+};
+
+function resolveEnvironment(context?: ModelRouterContext): ModelRouterEnvironment {
+  if (context?.environment === ENVIRONMENTS.PRODUCTION) return ENVIRONMENTS.PRODUCTION;
+  if (context?.environment === ENVIRONMENTS.DEVELOPMENT) return ENVIRONMENTS.DEVELOPMENT;
+  return process.env.NODE_ENV === ENVIRONMENTS.PRODUCTION ? ENVIRONMENTS.PRODUCTION : ENVIRONMENTS.DEVELOPMENT;
+}
+
+export class ModelRouter {
+  async getModel(context?: ModelRouterContext): Promise<LanguageModelV4> {
+    return (await this.getRoutingResult(context)).model;
+  }
+
+  async getRoutingResult(context?: ModelRouterContext): Promise<RoutingResult> {
+    const environment = resolveEnvironment(context);
+    const policy: ModelPolicy = getPolicyForEnvironment(environment);
+
+    // Request providers from registry in the order defined by the policy.
+    const providers: Provider[] = getProvidersByNames(policy.providerOrder);
+
+    const errors: Array<Error | string> = [];
+
+    // Execute the policy: ask each provider for its preferred model.
+    for (const prov of providers) {
+      try {
+        if (!prov.isConfigured()) {
+          continue;
+        }
+
+        const result = prov.getModel();
+        if (result) {
+          return {
+            model: result.model,
+            provider: prov.name,
+            modelId: result.modelId,
+          };
+        }
+      } catch (err) {
+        errors.push(err instanceof Error ? err : String(err));
+      }
+    }
+
+    // If no model selected, provide some debugging help.
+    const registered = listRegisteredProviders().join(", ");
+    const errorDetail =
+      errors.length > 0 ? ` Errors: ${errors.map((e) => String(e)).join("; ")}` : "";
+
+    throw new Error(
+      `ModelRouter failed to select a model for environment '${environment}'. Registered providers: [${registered}].` +
+        errorDetail,
+    );
+  }
+}
+
+================
+File: router/provider-registry.ts
+================
+import type { LanguageModelV4 } from "@ai-sdk/provider";
+import type { ProviderName } from "../constants/providers";
+
+export type ProviderResult = {
+  model: LanguageModelV4;
+  modelId?: string;
+};
+
+export type Provider = {
+  /** stable provider name */
+  name: ProviderName;
+  /** returns true if provider is configured in the environment */
+  isConfigured: () => boolean;
+  /** returns the provider's preferred LanguageModel and optional model ID */
+  getModel: () => ProviderResult | null;
+};
+
+const registry = new Map<string, Provider>();
+
+export function registerProvider(provider: Provider) {
+  if (!provider || !provider.name) return;
+  registry.set(provider.name, provider);
+}
+
+export function getProvider(name: ProviderName): Provider | undefined {
+  return registry.get(name);
+}
+
+export function getProvidersByNames(names: ProviderName[]): Provider[] {
+  return names
+    .map((n) => registry.get(n))
+    .filter((p): p is Provider => typeof p !== "undefined");
+}
+
+export function listRegisteredProviders(): string[] {
+  return Array.from(registry.keys());
+}
+
+================
+File: router/register-providers.ts
+================
+import { registerProvider } from "./provider-registry";
+import { googleProvider } from "../providers/google";
+import { openrouterProvider } from "../providers/openrouter";
+import { openaiProvider } from "../providers/openai";
+
+let builtInProvidersRegistered = false;
+
+export function registerBuiltInProviders() {
+  if (builtInProvidersRegistered) return;
+
+  registerProvider(googleProvider);
+  registerProvider(openrouterProvider);
+  registerProvider(openaiProvider);
+
+  builtInProvidersRegistered = true;
+}
+
+// This module should be imported and executed once during app bootstrap.
+// It is intentionally kept separate from ModelRouter so the router remains pure.
+
+export { registerProvider } from "./provider-registry";
+
+================
+File: schemas/file.ts
+================
+
+
+================
+File: schemas/project.ts
+================
+
+
+================
+File: schemas/tool.ts
+================
+
+
+================
+File: tools/index.ts
+================
+export const tools = {}
+
+// Later we'll export:
+
+// writeFile
+// readFile
+// runCommand
+// done
+// etc.
+
+// The docs encourage passing a tools object to the agent, so having a central export fits naturally.
+
+================
+File: index.ts
+================
+// This becomes the public AI public API.
+
+// Instead of importing deeply:
+
+// import { codingAgent } from "@/ai/agent/coding-agent";
+
+// everywhere else, export it from here so consumers can simply import from @/ai.
+
+export { ModelRouter } from "./router/model-router";
+
+// Preserve the existing public API surface while keeping the router entrypoint small.
+export { createGeminiModel, isGeminiConfigured, googleProvider } from "./providers/google";
+export { createOpenRouterModel, isOpenRouterConfigured, openrouterProvider } from "./providers/openrouter";
+export { createOpenAIModel, isOpenAIConfigured, openaiProvider } from "./providers/openai";
+export {
+  registerBuiltInProviders,
+  registerProvider,
+  registerProvider as registerProviders,
+} from "./router/register-providers";
+
+
+
+
+
+================================================================
+End of Codebase
+================================================================
