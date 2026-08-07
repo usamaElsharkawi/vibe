@@ -692,7 +692,342 @@ This means we no longer need a dedicated agent framework.
 
 # Final Architecture
 
+<details>
+<summary><strong>Model Router Deep Dive</strong></summary>
 
+<p>A comprehensive, multi-part explanation of the Model Router used by Vibe. Expand to view Part 1 (Foundational Concepts). Additional parts will be added as collapsible sections under this parent.</p>
+
+<details>
+<summary><strong>Part 1 — Foundational Concepts</strong></summary>
+
+
+### 1. What is a Model Router and why do we need it?
+
+A Model Router is the code that chooses the right AI model provider for a request.
+It sits between the app and the provider implementations and answers questions like:
+
+- “Is Google configured?”
+- “Can OpenRouter return a usable model?”
+- “Which provider should I use first in development?”
+- “If one provider fails, can I automatically try the next one?”
+
+This keeps the rest of the app from having to know provider-specific details.
+
+#### Before the router
+
+```ts
+if (process.env.NODE_ENV === "production") {
+  return openai.chat("gpt-4");
+} else {
+  return google.chat("gemini-3.5-flash");
+}
+```
+
+#### After the router
+
+```ts
+const model = await router.getModel();
+await model.chat({ messages: [...] });
+```
+
+The difference is that after the router, the app no longer hardcodes which provider to use.
+
+#### Real-world analogy
+
+Think of the Model Router as an air traffic controller:
+
+- The app is the passenger who needs a flight.
+- Providers are airlines with different availability and price.
+- The router decides which airline to book.
+
+If Airline A is unavailable, the router can switch to Airline B without the passenger knowing.
+
+### 2. Provider Abstraction
+
+A provider is any implementation that can return a model for the router.
+The router does not know how the provider works, only that it follows a contract.
+
+```ts
+interface Provider {
+  name: string;
+  isConfigured(): boolean;
+  getModel(): LanguageModelV4 | null;
+}
+```
+
+That contract means the router only asks two questions:
+
+1. `isConfigured()` — is the provider ready to use?
+2. `getModel()` — return the model if possible
+
+Providers hide details like:
+
+- API key management
+- SDK initialization
+- model selection
+- provider-specific errors
+
+This is what abstraction means: the router depends on **what** the provider does, not **how** it does it.
+
+### 3. Type Safety in TypeScript
+
+In a router design, type safety is the glue that keeps different providers aligned.
+
+The router returns a typed model, such as `LanguageModelV4`, so the calling code can use it safely.
+
+That means:
+
+- providers must return the same shape
+- TypeScript catches mistakes early
+- the app gets autocomplete and compile-time confidence
+
+Example typed contract:
+
+```ts
+type ProviderResult = {
+  model: LanguageModelV4;
+  modelId: string;
+};
+```
+
+With this, the router can do:
+
+```ts
+const result = provider.getModel();
+if (result) {
+  return result.model;
+}
+```
+
+and the caller knows the model supports the expected API.
+
+### Visualization
+
+```text
+          App Code
+             │
+             ▼
+       ModelRouter
+             │
+     ┌───────┴────────┐
+     │ Provider Contract │
+     │  name           │
+     │  isConfigured() │
+     │  getModel()     │
+     └───────┬─────────┘
+             │
+   ┌─────────┴─────────┬──────────┐
+   │                   │          │
+   ▼                   ▼          ▼
+GoogleProvider   OpenRouterProvider   OpenAIProvider
+   │                   │          │
+   └── hides details ───┴── hides details ──┘
+```
+
+### What is being abstracted?
+
+The router does not care about:
+
+- whether the provider is Google, OpenAI, or OpenRouter
+- how the API key is read
+- which SDK is initialized
+- how the model is created
+
+It only cares about:
+
+- is the provider ready?
+- can it return a model?
+
+### Why this matters
+
+- prevents provider-specific logic from spreading through the app
+- makes the router reusable across different AI providers
+- allows automatic fallback without changing application code
+- improves testability by letting you mock providers
+
+### Key Takeaways
+
+- The Model Router centralizes provider selection.
+- Provider abstraction makes the router depend on a contract, not implementation.
+- `LanguageModelV4` is the shared type that keeps different provider models compatible.
+- This pattern is the foundation for building a provider-agnostic AI layer.
+
+</details>
+
+<details>
+<summary><strong>Part 2 — Registry Pattern (Summary)</strong></summary>
+
+
+### Registry Pattern — Summary
+
+> **A Registry is a central place that stores and lets you look up available providers.**
+
+```text
+                  ┌──────────────────────┐
+                  │      Registry        │
+                  │                      │
+                  │ "google" ──► Google  │
+                  │ "openrouter" ──► OR  │
+                  │ "openai" ──► OpenAI  │
+                  └──────────▲───────────┘
+                             │
+                       register()
+                             │
+                       New Provider
+
+              Router
+                 │
+             get(name)
+                 │
+                 ▼
+              Registry
+                 │
+                 ▼
+          Concrete Provider
+```
+
+### In our Vibe application
+
+- **Providers register themselves** in the registry.
+- **The router asks the registry** for a provider by name.
+- The router **doesn't need to know how providers are stored or created**.
+- Adding a new provider means **registering it**, rather than rewriting the router.
+
+### Interface vs. Registry
+
+```
+Provider Interface → WHAT can a provider do?
+Registry            → WHICH providers are available?
+```
+
+Together:
+
+> **Interface = interchangeability**
+> 
+> **Registry = discoverability**
+
+This keeps the **Model Router generic, extensible, and decoupled from individual providers**.
+
+</details>
+
+<details>
+<summary><strong>Part 3 — Strategy Pattern</strong></summary>
+
+    
+The Strategy pattern is the way we separate the router's decision about which providers to try from the router's actual work of trying them.
+
+### What the Strategy pattern does here
+
+In the Model Router, we have two separate roles:
+    
+1. Choose the provider order for the current environment.
+2. Execute that order until a provider succeeds.
+
+The Strategy pattern says those should be separate.
+The router is responsible for execution. The policy is responsible for the choice.
+
+### How this is represented in code
+
+The policy is a small data object:
+
+```ts
+export type ModelPolicy = {
+  name: string;
+  providerOrder: ProviderName[];
+};
+```
+
+And the selector chooses a policy by environment:
+
+```ts
+export function getPolicyForEnvironment(env: Environment | undefined): ModelPolicy {
+  const environment = env === ENVIRONMENTS.PRODUCTION
+    ? ENVIRONMENTS.PRODUCTION
+    : ENVIRONMENTS.DEVELOPMENT;
+
+  return environment === ENVIRONMENTS.PRODUCTION
+    ? productionPolicy
+    : developmentPolicy;
+}
+```
+
+The important part is that the router does not embed provider selection logic directly. It asks a separate function for the policy.
+
+### Why this is better than `if/else`
+
+If the router were written as a series of hardcoded `if` statements, every new environment or new provider would require changing the router itself.
+That quickly becomes hard to maintain.
+
+With the Strategy pattern, adding a new environment or changing the provider order means changing policy data, not changing the router logic.
+
+### What the router actually does with the policy
+
+The router takes the policy's `providerOrder` and does this:
+
+- Look up the corresponding provider objects.
+- Loop through them in order.
+- Skip providers that are not configured.
+- Ask each provider for a model.
+- Return the first working model.
+- If none succeed, throw an error.
+
+This means the router is always the same. The only thing that changes is the order of providers it tries.
+
+### A concrete example
+
+If development policy is:
+
+```ts
+const developmentPolicy = {
+  name: 'development',
+  providerOrder: ['google', 'openrouter', 'openai'],
+};
+```
+
+then the router tries Google first, then OpenRouter, then OpenAI.
+
+If production policy is:
+
+```ts
+const productionPolicy = {
+  name: 'production',
+  providerOrder: ['openai', 'openrouter', 'google'],
+};
+```
+
+then the router tries OpenAI first, then OpenRouter, then Google.
+
+The code that performs the loop is unchanged in both cases.
+
+### Why this works for future projects
+
+The general approach is:
+
+- Keep the decision separate from execution.
+- Represent the decision as simple data.
+- Write the executor to follow that data.
+
+This is a reusable pattern for any case where you want to choose between multiple implementations based on context.
+
+### What to remember
+
+- Strategy = the policy or plan.
+- Executor = the generic code that follows the plan.
+- Selection logic should live outside the executor.
+- If you find yourself writing many environment-based branches inside the executor, that is a sign you should use this pattern.
+
+### What's next
+
+The next step is to document the actual router implementation and the supporting files, line by line.
+That means moving from the conceptual strategy pattern to the exact code that:
+- registers providers,
+- selects policies,
+- looks up providers by name,
+- and executes the routing loop.
+
+</details>
+
+</details>
 
 ---
 
