@@ -1,8 +1,8 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import type { LanguageModelV4 } from "@ai-sdk/provider";
 import type { Provider } from "../router/provider-registry";
+import { PROVIDERS } from "../constants/providers";
+import { OPENAI_MODELS } from "../constants/models";
 
-export const OPENAI_DEFAULT_MODEL = "gpt-4o-mini";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 export function isOpenAIConfigured(): boolean {
@@ -18,17 +18,20 @@ function createOpenAIProviderInstance() {
 }
 
 export const openaiProvider: Provider = {
-  name: "openai",
+  name: PROVIDERS.OPENAI,
   isConfigured: () => isOpenAIConfigured(),
-  createModel: (modelId?: string) => {
+  getModel: () => {
     const inst = createOpenAIProviderInstance();
     if (!inst) return null;
-    // modelId may be provided by a policy; fall back to default
-    return inst.chat((modelId as string) || OPENAI_DEFAULT_MODEL);
+
+    return {
+      model: inst.chat(OPENAI_MODELS.DEFAULT),
+      modelId: OPENAI_MODELS.DEFAULT,
+    };
   },
 };
 
-// Backwards-compat helper
-export function createOpenAIModel(): LanguageModelV4 | null {
-  return openaiProvider.createModel(OPENAI_DEFAULT_MODEL);
+// Backwards-compat helper function kept so external callers don't break.
+export function createOpenAIModel() {
+  return openaiProvider.getModel()?.model ?? null;
 }

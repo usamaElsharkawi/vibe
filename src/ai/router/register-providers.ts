@@ -15,9 +15,7 @@ export function registerBuiltInProviders() {
   builtInProvidersRegistered = true;
 }
 
-export function ensureBuiltInProvidersRegistered() {
-  registerBuiltInProviders();
-}
+// This module should be imported and executed once during app bootstrap.
+// It is intentionally kept separate from ModelRouter so the router remains pure.
 
-// Re-export registerProvider for ad-hoc registration
 export { registerProvider } from "./provider-registry";

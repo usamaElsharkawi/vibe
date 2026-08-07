@@ -1,15 +1,17 @@
 import { developmentPolicy } from "./development";
 import { productionPolicy } from "./production";
+import { ENVIRONMENTS, type Environment } from "../constants/environment";
+import type { ProviderName } from "../constants/providers";
 
 export type ModelPolicy = {
   name: string;
-  providerOrder: string[]; // ordered list of provider names
-  modelPreferences?: Record<string, string[]>; // providerName -> ordered model ids
+  providerOrder: ProviderName[]; // ordered list of provider names
 };
 
-export function getPolicyForEnvironment(env: string | undefined): ModelPolicy {
-  const e = env === "production" ? "production" : "development";
-  return e === "production" ? productionPolicy : developmentPolicy;
+
+export function getPolicyForEnvironment(env: Environment | undefined): ModelPolicy {
+  const environment = env === ENVIRONMENTS.PRODUCTION ? ENVIRONMENTS.PRODUCTION : ENVIRONMENTS.DEVELOPMENT;
+  return environment === ENVIRONMENTS.PRODUCTION ? productionPolicy : developmentPolicy;
 }
 
 export { developmentPolicy, productionPolicy };
