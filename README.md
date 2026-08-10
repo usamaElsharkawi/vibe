@@ -27,14 +27,14 @@ Vibe is a SaaS platform (like Lovable, Bolt, Replit AI) where users type a natur
 
 ### Tech Stack
 
-| Layer              | Tech                                                                |
-| ------------------ | ------------------------------------------------------------------- |
-| **Frontend**       | Next.js 15, React 19, Tailwind v4, ShadCN UI, TanStack Query        |
-| **Backend**        | tRPC (type-safe API), Prisma ORM, PostgreSQL on Neon                |
-| **Auth & Billing** | Clerk (auth + subscription billing)                                 |
-| **AI**             | OpenAI/Anthropic/Grok + Inngest background jobs                     |
-| **Sandbox**        | E2B Cloud Sandboxes (Docker-based isolation)                        |
-| **Dev Workflow**   | Git, GitHub PRs, CodeRabbit AI code reviews                         |
+| Layer              | Tech                                                         |
+| ------------------ | ------------------------------------------------------------ |
+| **Frontend**       | Next.js 15, React 19, Tailwind v4, ShadCN UI, TanStack Query |
+| **Backend**        | tRPC (type-safe API), Prisma ORM, PostgreSQL on Neon         |
+| **Auth & Billing** | Clerk (auth + subscription billing)                          |
+| **AI**             | OpenAI/Anthropic/Grok + Inngest background jobs              |
+| **Sandbox**        | E2B Cloud Sandboxes (Docker-based isolation)                 |
+| **Dev Workflow**   | Git, GitHub PRs, CodeRabbit AI code reviews                  |
 
 </details>
 
@@ -626,8 +626,6 @@ git push --force-with-lease  # Safe force push
 
 </details>
 
-
-
 <details>
 <summary><strong>🧩 Design Patterns</strong></summary>
 
@@ -669,7 +667,7 @@ Swapping or adding a provider means editing every consumer. The codebase becomes
 agent ──asks──► Registry ──holds──► { Google, OpenRouter, OpenAI, ... }
 ```
 
-Consumers ask by name. The registry hides *which specific objects* exist. Adding a new one no longer touches the consumers.
+Consumers ask by name. The registry hides _which specific objects_ exist. Adding a new one no longer touches the consumers.
 
 ---
 
@@ -677,10 +675,10 @@ Consumers ask by name. The registry hides *which specific objects* exist. Adding
 
 Every registry has exactly two kinds of participants:
 
-| Actor | Responsibility | In our code | When it acts |
-| --- | --- | --- | --- |
-| **The Registrar** (writer) | Builds objects and puts them *into* the registry | `router/register-providers.ts` | Once, at app startup |
-| **The Consumer** (reader) | Asks the registry for objects *by name* | `router/model-router.ts` | On every `getModel()` request |
+| Actor                      | Responsibility                                   | In our code                    | When it acts                  |
+| -------------------------- | ------------------------------------------------ | ------------------------------ | ----------------------------- |
+| **The Registrar** (writer) | Builds objects and puts them _into_ the registry | `router/register-providers.ts` | Once, at app startup          |
+| **The Consumer** (reader)  | Asks the registry for objects _by name_          | `router/model-router.ts`       | On every `getModel()` request |
 
 The split is the whole point. The consumer never imports the things it looks up — it imports only the registry.
 
@@ -690,9 +688,9 @@ The split is the whole point. The consumer never imports the things it looks up 
 
 **No — but it usually is.**
 
-A Registry is defined by its **role** (a known lookup point), not its data structure. It *could* be a list you scan, or a more complex structure. In practice, a key-value store (a `Map`) is used the vast majority of the time because lookups by name are fast and natural.
+A Registry is defined by its **role** (a known lookup point), not its data structure. It _could_ be a list you scan, or a more complex structure. In practice, a key-value store (a `Map`) is used the vast majority of the time because lookups by name are fast and natural.
 
-So treat **key-value as the default shape, not a law**. What makes something a Registry is that it is *the* well-known place to find things — not that it happens to be a `Map`.
+So treat **key-value as the default shape, not a law**. What makes something a Registry is that it is _the_ well-known place to find things — not that it happens to be a `Map`.
 
 ---
 
@@ -706,9 +704,9 @@ Before anything can be stored, we define what a "registered thing" looks like. F
 
 ```ts
 export type Provider = {
-  name: ProviderName;                       // the KEY — how we'll find it later
-  isConfigured: () => boolean;              // is this provider usable right now?
-  getModel: () => ProviderResult | null;    // give me a model from it
+  name: ProviderName; // the KEY — how we'll find it later
+  isConfigured: () => boolean; // is this provider usable right now?
+  getModel: () => ProviderResult | null; // give me a model from it
 };
 ```
 
@@ -729,7 +727,7 @@ Because it lives at module scope, **only one instance exists** for the whole app
 ```ts
 export function registerProvider(provider: Provider) {
   if (!provider || !provider.name) return;
-  registry.set(provider.name, provider);   // key = name, value = provider
+  registry.set(provider.name, provider); // key = name, value = provider
 }
 ```
 
@@ -739,23 +737,23 @@ Called once per provider during bootstrap. The guard (`if (!provider || !provide
 
 ```ts
 export function getProvider(name: ProviderName): Provider | undefined {
-  return registry.get(name);   // single lookup by key
+  return registry.get(name); // single lookup by key
 }
 
 export function getProvidersByNames(names: ProviderName[]): Provider[] {
   return names
-    .map((n) => registry.get(n))   // turn each name → its Provider
+    .map((n) => registry.get(n)) // turn each name → its Provider
     .filter((p): p is Provider => typeof p !== "undefined");
-    //        ↑ quietly drop any name that wasn't registered,
-    //          instead of letting `undefined` leak into callers
+  //        ↑ quietly drop any name that wasn't registered,
+  //          instead of letting `undefined` leak into callers
 }
 
 export function listRegisteredProviders(): string[] {
-  return Array.from(registry.keys());   // used for debugging & error messages
+  return Array.from(registry.keys()); // used for debugging & error messages
 }
 ```
 
-`getProvidersByNames` is the function our router actually calls: it takes an *ordered list of names* (from the policy) and resolves them to real `Provider` objects, skipping any that aren't registered.
+`getProvidersByNames` is the function our router actually calls: it takes an _ordered list of names_ (from the policy) and resolves them to real `Provider` objects, skipping any that aren't registered.
 
 ---
 
@@ -786,7 +784,7 @@ The router is closed for modification, but open for extension. That is the **Ope
 
 Whenever you look at a registry, ask yourself:
 
-> *"If I add a new thing, does the code that **looks things up** have to change?"*
+> _"If I add a new thing, does the code that **looks things up** have to change?"_
 
 - **No** → it is a healthy registry. ✅
 - **Yes** → the consumer is hardcoded to specific names/instances, and the abstraction is leaking.
@@ -805,7 +803,7 @@ By hiding all providers behind a single lookup point, the router can select amon
 
 ### Key Takeaways
 
-- A **Registry** is a well-known object that other objects use to *find* common objects or services.
+- A **Registry** is a well-known object that other objects use to _find_ common objects or services.
 - It is defined by its **role** (a known lookup point), not its data structure — though a key-value `Map` is the common implementation.
 - It always has two actors: a **Registrar** (writes once at startup) and a **Consumer** (reads by key on demand).
 - The consumer imports the **registry**, never the things inside it — that decoupling is the entire benefit.
@@ -834,16 +832,16 @@ The principle behind the pattern:
 
 > "Favor object composition over class inheritance."
 
-- **Inheritance** is an **IS-A** relationship (`Dog extends Animal` → "a Dog *is an* Animal"). The bond is **permanent and compile-time** — once `extends` is written, it cannot change at runtime.
-- **Composition** is a **HAS-A** relationship (`class Dog { constructor(private mover: MoveBehavior) }` → "a Dog *has a* mover"). The bond is **dynamic** — the referenced object can be **swapped at runtime**.
+- **Inheritance** is an **IS-A** relationship (`Dog extends Animal` → "a Dog _is an_ Animal"). The bond is **permanent and compile-time** — once `extends` is written, it cannot change at runtime.
+- **Composition** is a **HAS-A** relationship (`class Dog { constructor(private mover: MoveBehavior) }` → "a Dog _has a_ mover"). The bond is **dynamic** — the referenced object can be **swapped at runtime**.
 
 Strategy chooses composition: instead of baking the behavior into the class by extending a superclass, the behavior is pulled **out** into its own object and handed in as a reference. The behavior becomes a **plug-in component**, not a baked-in feature.
 
 #### 2. Inheritance is not about reuse
 
-The deepest insight, and the one most people get wrong. Many developers reach for inheritance thinking: *"If `AdminUser extends User`, I reuse `User`'s code for free."* They use inheritance as a **code-copy machine**.
+The deepest insight, and the one most people get wrong. Many developers reach for inheritance thinking: _"If `AdminUser extends User`, I reuse `User`'s code for free."_ They use inheritance as a **code-copy machine**.
 
-The GoF book pushes back: **inheritance is about establishing a type relationship (subtyping + polymorphism), not about scooping up code.** Code reuse is a *side effect*, not the *purpose*. Using inheritance *primarily* for reuse hits a wall.
+The GoF book pushes back: **inheritance is about establishing a type relationship (subtyping + polymorphism), not about scooping up code.** Code reuse is a _side effect_, not the _purpose_. Using inheritance _primarily_ for reuse hits a wall.
 
 The wall — objects that need to sort differently. The inheritance-for-reuse route:
 
@@ -857,7 +855,7 @@ User
 Problems erupt:
 
 - **Rigid** — the sorting is permanently welded to the class; a `UserByName` can never sort by email.
-- **Can't combine** — "sort by name *then* email" needs a new `UserByNameThenEmail` class → a combinatorial **class explosion**.
+- **Can't combine** — "sort by name _then_ email" needs a new `UserByNameThenEmail` class → a combinatorial **class explosion**.
 - **Fragile base class** — change `User` and every subclass may break.
 - **Locked at compile time** — the behavior was chosen when `extends` was written and cannot change while the program runs.
 
@@ -882,23 +880,23 @@ This is the GoF's intent statement, almost verbatim. Parse it:
 
 - **"the algorithm"** = the behavior that might need to change.
 - **"varies independently"** = you can change, add, or remove it **without touching** anything else.
-- **"clients that use it"** = the code that *consumes* the algorithm.
+- **"clients that use it"** = the code that _consumes_ the algorithm.
 
 > **I should be able to add, remove, or rewrite the algorithm WITHOUT opening the file of the code that uses it.**
 
-The two sides are **decoupled** — they vary on separate tracks and meet only through the **shared interface** (the Strategy contract). This is the **Open/Closed Principle** again: the client is *closed* (unchanged), the algorithms are *open* (extendable), the interface is the hinge.
+The two sides are **decoupled** — they vary on separate tracks and meet only through the **shared interface** (the Strategy contract). This is the **Open/Closed Principle** again: the client is _closed_ (unchanged), the algorithms are _open_ (extendable), the interface is the hinge.
 
 ### Our Implementation: `src/ai/policies/`
 
 Every piece of Strategy maps onto our code:
 
-| Strategy concept | In our code |
-| --- | --- |
-| **The Strategy interface** (the shared contract) | `ModelPolicy` type |
-| **A concrete Strategy** (one specific algorithm) | `developmentPolicy`, `productionPolicy` |
-| **The Client** (the code that uses a strategy) | `ModelRouter.getRoutingResult()` |
-| **Selection of which strategy** | `getPolicyForEnvironment(env)` |
-| **The "algorithm"** | the ordered list of providers to try — `providerOrder` |
+| Strategy concept                                 | In our code                                            |
+| ------------------------------------------------ | ------------------------------------------------------ |
+| **The Strategy interface** (the shared contract) | `ModelPolicy` type                                     |
+| **A concrete Strategy** (one specific algorithm) | `developmentPolicy`, `productionPolicy`                |
+| **The Client** (the code that uses a strategy)   | `ModelRouter.getRoutingResult()`                       |
+| **Selection of which strategy**                  | `getPolicyForEnvironment(env)`                         |
+| **The "algorithm"**                              | the ordered list of providers to try — `providerOrder` |
 
 The key code, condensed:
 
@@ -906,13 +904,13 @@ The key code, condensed:
 // ── THE STRATEGY INTERFACE (the contract all strategies share) ──
 export type ModelPolicy = {
   name: string;
-  providerOrder: ProviderName[];   // ← the "algorithm": ordered providers to try
+  providerOrder: ProviderName[]; // ← the "algorithm": ordered providers to try
 };
 
 // ── CONCRETE STRATEGY A ──
 export const developmentPolicy: ModelPolicy = {
   name: "development",
-  providerOrder: [PROVIDERS.GOOGLE, PROVIDERS.OPENROUTER],   // free-first
+  providerOrder: [PROVIDERS.GOOGLE, PROVIDERS.OPENROUTER], // free-first
 };
 
 // ── CONCRETE STRATEGY B ──
@@ -935,8 +933,8 @@ async getRoutingResult(context?) {
 
 Apply the three insights to this real code:
 
-- **Composition, not inheritance** — `ModelRouter` does **not** extend a `DevelopmentRouter` / `ProductionRouter`. It *holds* a policy object (composition). The router *has a* policy; it isn't *a* policy.
-- **Inheritance is not about reuse** — the bad version would be `DevelopmentModelRouter extends ModelRouter`, `ProductionModelRouter extends ModelRouter`, each overriding `providerOrder`. Every environment would mean a new subclass, with router logic locked into the hierarchy. We avoided all that by pulling `providerOrder` into a **plain data object** selected at runtime. The router is *one* class.
+- **Composition, not inheritance** — `ModelRouter` does **not** extend a `DevelopmentRouter` / `ProductionRouter`. It _holds_ a policy object (composition). The router _has a_ policy; it isn't _a_ policy.
+- **Inheritance is not about reuse** — the bad version would be `DevelopmentModelRouter extends ModelRouter`, `ProductionModelRouter extends ModelRouter`, each overriding `providerOrder`. Every environment would mean a new subclass, with router logic locked into the hierarchy. We avoided all that by pulling `providerOrder` into a **plain data object** selected at runtime. The router is _one_ class.
 - **The algorithm varies independently** — proven next.
 
 ---
@@ -957,7 +955,7 @@ The algorithm changed on its track; the client stayed on its track; they meet on
 
 Whenever you look at a Strategy, ask:
 
-> *"Can I add a new algorithm without touching the client?"*
+> _"Can I add a new algorithm without touching the client?"_
 
 - **No** → the client is hardcoded to a specific algorithm; the pattern isn't doing its job.
 - **Yes** → it is a healthy Strategy. ✅
@@ -968,11 +966,11 @@ For our router: adding `stagingPolicy` changes `policies/` only. `ModelRouter` n
 
 ### Why We Use It in Vibe
 
-*Which providers to try, and in what order* is a decision that differs per environment (development wants free-first; production wants reliable-first) and may evolve over time. By making it a **Strategy**, that decision lives in its own swappable objects behind the `ModelPolicy` interface.
+_Which providers to try, and in what order_ is a decision that differs per environment (development wants free-first; production wants reliable-first) and may evolve over time. By making it a **Strategy**, that decision lives in its own swappable objects behind the `ModelPolicy` interface.
 
 So we can change the order for an existing environment, invent a whole new routing strategy (e.g. cost-aware, capability-based), or add a new environment (`staging`) — **without the `ModelRouter` ever knowing.** The router stays a single, stable class; the routing rules grow on a separate track.
 
-Together, **Registry** (hide the providers behind one lookup point) + **Strategy** (make the routing rules swappable) are the two ingredients of our "Policy-Driven Failover": the Strategy decides *which providers to try in what order*, and the Registry *resolves those names to real provider objects*. The router just walks the Strategy's order using the Registry.
+Together, **Registry** (hide the providers behind one lookup point) + **Strategy** (make the routing rules swappable) are the two ingredients of our "Policy-Driven Failover": the Strategy decides _which providers to try in what order_, and the Registry _resolves those names to real provider objects_. The router just walks the Strategy's order using the Registry.
 
 ---
 
@@ -988,7 +986,6 @@ Together, **Registry** (hide the providers behind one lookup point) + **Strategy
 ---
 
 </details>
-
 
 <details>
 <summary><strong>🏗️ Major Architectural Shift: Building a Provider-Agnostic Autonomous Coding Agent</strong></summary>
@@ -1017,8 +1014,6 @@ After researching the latest **Vercel AI SDK v6**, we decided to replace AgentKi
 
 Every autonomous agent follows the exact same cycle:
 
-
-
 Frameworks like:
 
 - AgentKit
@@ -1036,7 +1031,7 @@ The difference is simply **how they manage the loop**, not what an agent fundame
 
 The latest Vercel AI SDK now provides a first-class agent abstraction:
 
-- 
+-
 
 It already manages:
 
@@ -1052,9 +1047,308 @@ This means we no longer need a dedicated agent framework.
 
 ---
 
-</details>
-
 # Final Architecture
+
+---
+
+# Responsibility of Each Layer
+
+## Next.js + tRPC
+
+Responsible for:
+
+- Receiving user prompts
+- Input validation
+- Triggering background jobs
+
+It should **never** execute long-running AI tasks.
+
+---
+
+## Inngest
+
+Responsible for long-running execution.
+
+It manages:
+
+- Background jobs
+- Retries
+- Scheduling
+- Error recovery
+- Job orchestration
+
+It does **not** perform reasoning.
+
+---
+
+## ToolLoopAgent
+
+This is the brain of the workflow.
+
+Its responsibility is:
+
+The agent continues until it decides the task is complete.
+
+---
+
+## LLM
+
+The LLM is responsible **only for reasoning**.
+
+It decides:
+
+- Which tool should be called
+- In what order
+- With what arguments
+
+The model **never executes code directly**.
+
+---
+
+## Custom Tools
+
+Every capability exposed to the AI is implemented as a normal TypeScript function.
+
+Examples:
+
+The model simply decides **when** to invoke them.
+
+---
+
+## E2B
+
+E2B acts as the remote development machine.
+
+It is responsible for:
+
+- Creating isolated environments
+- Writing files
+- Running shell commands
+- Installing packages
+- Running development servers
+- Returning preview URLs
+
+---
+
+# Dynamic Model Routing
+
+Instead of binding the agent to a single model, we introduce a dedicated **Model Router**.
+
+The agent never communicates directly with Gemini or OpenRouter.
+
+Instead:
+
+This makes the entire AI layer provider-agnostic.
+
+---
+
+# Why a Model Router?
+
+The router gives us complete flexibility.
+
+It can:
+
+- Switch providers
+- Handle rate limits
+- Support future models
+- Select models dynamically
+
+without changing the rest of the application.
+
+---
+
+# Runtime Failover
+
+One of the biggest improvements in our architecture is automatic provider failover.
+
+Example:
+
+The user never notices the switch.
+
+The agent simply continues.
+
+---
+
+# Why This Works
+
+The conversation history is **owned by the ToolLoopAgent**, not by the AI provider.
+
+The provider is only responsible for generating the next reasoning step.
+
+Conceptually:
+
+Changing providers does **not** mean losing the conversation.
+
+---
+
+# Runtime Memory vs Persistent Memory
+
+An important architectural distinction.
+
+## Runtime Memory
+
+Owned by ToolLoopAgent.
+
+Contains:
+
+- Messages
+- Tool calls
+- Tool results
+- Intermediate reasoning
+
+This memory exists **only while the current agent execution is running**.
+
+When the execution finishes, this memory disappears.
+
+---
+
+## Persistent Memory
+
+Owned by our application.
+
+Stored inside PostgreSQL.
+
+Examples:
+
+- Projects
+- Generations
+- Conversations
+- Tool execution logs
+- Sandbox IDs
+- Generated files
+- Preview URLs
+
+Persistent memory allows users to:
+
+- Continue a project later
+- Replay generations
+- Resume failed executions
+- View previous agent activity
+
+---
+
+# Why OpenRouter?
+
+During development we will primarily use OpenRouter's free models.
+
+Benefits:
+
+- Avoid Gemini free-tier rate limits.
+- Easily switch between different free models.
+- Provider-agnostic architecture.
+- No application code changes when switching providers.
+
+Only the router configuration changes.
+
+---
+
+# Future Expansion
+
+The architecture allows adding any future provider without changing the agent.
+
+Examples:
+
+- Gemini
+- OpenRouter
+- Groq
+- OpenAI
+- Anthropic
+- xAI
+- DeepSeek
+
+The rest of the system remains identical.
+
+---
+
+# Why We Like This Architecture
+
+Compared to using AgentKit directly, our architecture provides:
+
+- ✅ Completely provider agnostic
+- ✅ Free development workflow
+- ✅ Dynamic model failover
+- ✅ Clean separation of concerns
+- ✅ Modern Vercel AI SDK Agent API
+- ✅ Easy future migration to any provider
+- ✅ Full compatibility with Inngest
+- ✅ Easier debugging
+- ✅ Easier testing
+- ✅ Better understanding of autonomous agents
+
+---
+
+# Core Mental Models
+
+## An agent is a loop
+
+---
+
+## Inngest is **not** the agent
+
+Inngest is responsible for **running** the workflow.
+
+ToolLoopAgent is responsible for **thinking**.
+
+---
+
+## The LLM is **not** the computer
+
+The model cannot:
+
+- create files
+- install packages
+- execute commands
+
+It only decides **which tool** should perform those actions.
+
+---
+
+## Tools are normal TypeScript functions
+
+There is nothing magical about tools.
+
+A tool is simply a function that the AI is allowed to invoke.
+
+---
+
+## The provider is replaceable
+
+The agent should never know whether it is talking to:
+
+- Gemini
+- OpenRouter
+- Claude
+- GPT
+- Groq
+
+Only the Model Router knows this.
+
+---
+
+# Final Design Principles
+
+1. Keep the AI layer provider-agnostic.
+2. Separate reasoning from execution.
+3. Let ToolLoopAgent own the execution loop.
+4. Let Inngest own background processing.
+5. Let E2B own code execution.
+6. Let the Model Router own provider selection and failover.
+7. Persist project state in the database, not inside the agent.
+8. Build every capability as a reusable tool.
+9. Design for extensibility from day one.
+10. Optimize for understanding first, implementation second.
+
+> **Final Takeaway**
+>
+> We are not building an application around a specific AI model.
+>
+> We are building an autonomous coding platform where the **agent**, **model provider**, **execution environment**, and **background orchestration** are all independent, replaceable layers.
+>
+> This modular architecture makes Vibe easier to maintain, cheaper to develop, and ready to adopt future AI models with minimal changes.
+
+---
+
+</details>
 
 <details>
 <summary><strong>Model Router Deep Dive</strong></summary>
@@ -1063,7 +1357,6 @@ This means we no longer need a dedicated agent framework.
 
 <details>
 <summary><strong>Part 1 — Foundational Concepts</strong></summary>
-
 
 ### 1. What is a Model Router and why do we need it?
 
@@ -1221,7 +1514,6 @@ It only cares about:
 <details>
 <summary><strong>Part 2 — Registry Pattern (Summary)</strong></summary>
 
-
 ### Registry Pattern — Summary
 
 > **A Registry is a central place that stores and lets you look up available providers.**
@@ -1267,7 +1559,7 @@ Registry            → WHICH providers are available?
 Together:
 
 > **Interface = interchangeability**
-> 
+>
 > **Registry = discoverability**
 
 This keeps the **Model Router generic, extensible, and decoupled from individual providers**.
@@ -1277,13 +1569,12 @@ This keeps the **Model Router generic, extensible, and decoupled from individual
 <details>
 <summary><strong>Part 3 — Strategy Pattern</strong></summary>
 
-    
 The Strategy pattern is the way we separate the router's decision about which providers to try from the router's actual work of trying them.
 
 ### What the Strategy pattern does here
 
 In the Model Router, we have two separate roles:
-    
+
 1. Choose the provider order for the current environment.
 2. Execute that order until a provider succeeds.
 
@@ -1304,10 +1595,13 @@ export type ModelPolicy = {
 And the selector chooses a policy by environment:
 
 ```ts
-export function getPolicyForEnvironment(env: Environment | undefined): ModelPolicy {
-  const environment = env === ENVIRONMENTS.PRODUCTION
-    ? ENVIRONMENTS.PRODUCTION
-    : ENVIRONMENTS.DEVELOPMENT;
+export function getPolicyForEnvironment(
+  env: Environment | undefined,
+): ModelPolicy {
+  const environment =
+    env === ENVIRONMENTS.PRODUCTION
+      ? ENVIRONMENTS.PRODUCTION
+      : ENVIRONMENTS.DEVELOPMENT;
 
   return environment === ENVIRONMENTS.PRODUCTION
     ? productionPolicy
@@ -1343,8 +1637,8 @@ If development policy is:
 
 ```ts
 const developmentPolicy = {
-  name: 'development',
-  providerOrder: ['google', 'openrouter', 'openai'],
+  name: "development",
+  providerOrder: ["google", "openrouter", "openai"],
 };
 ```
 
@@ -1354,8 +1648,8 @@ If production policy is:
 
 ```ts
 const productionPolicy = {
-  name: 'production',
-  providerOrder: ['openai', 'openrouter', 'google'],
+  name: "production",
+  providerOrder: ["openai", "openrouter", "google"],
 };
 ```
 
@@ -1384,6 +1678,7 @@ This is a reusable pattern for any case where you want to choose between multipl
 
 The next step is to document the actual router implementation and the supporting files, line by line.
 That means moving from the conceptual strategy pattern to the exact code that:
+
 - registers providers,
 - selects policies,
 - looks up providers by name,
@@ -1470,19 +1765,21 @@ export type Environment = (typeof ENVIRONMENTS)[keyof typeof ENVIRONMENTS];
 
 Read inside-out:
 
-1. `typeof ENVIRONMENTS` — At the type level, `typeof` reads the **type** of the *value* `ENVIRONMENTS`:
+1. `typeof ENVIRONMENTS` — At the type level, `typeof` reads the **type** of the _value_ `ENVIRONMENTS`:
+
    ```ts
    { readonly DEVELOPMENT: "development"; readonly PRODUCTION: "production" }
    ```
 
 2. `keyof typeof ENVIRONMENTS` — `keyof` produces a **union of all keys**:
+
    ```ts
-   "DEVELOPMENT" | "PRODUCTION"
+   "DEVELOPMENT" | "PRODUCTION";
    ```
 
 3. `(typeof ENVIRONMENTS)[keyof typeof ENVIRONMENTS]` — **Indexed access**: "Index into the object type using any of its keys." The result is a union of all the **values**:
    ```ts
-   "development" | "production"
+   "development" | "production";
    ```
 
 So `Environment` is the union type `"development" | "production"`.
@@ -1490,6 +1787,7 @@ So `Environment` is the union type `"development" | "production"`.
 **Why this pattern instead of a plain string or enum?** No runtime overhead (just an object), single source of truth (add `"staging"` in one place and both the value and the type update), and type safety (passing `"staging"` to an `Environment` parameter is a compile error).
 
 **What would break if removed?** Every file importing `ENVIRONMENTS` or `Environment` would fail to compile:
+
 - `src/ai/policies/index.ts`
 - `src/ai/router/model-router.ts`
 
@@ -1501,8 +1799,9 @@ environment.ts ──► router/model-router.ts    (imports ENVIRONMENTS, Enviro
 ```
 
 > **Key Takeaway**
+>
 > - `as const` makes object property values into literal types.
-> - `typeof X` at the type level reads the *type* of a *value*.
+> - `typeof X` at the type level reads the _type_ of a _value_.
 > - `keyof X` produces a union of the object's keys.
 > - `X[keyof X]` indexes an object type to get a union of its values.
 > - This "type inference from values" pattern generates union types from constant objects — no enums needed.
@@ -1546,6 +1845,7 @@ providers.ts ──► policies/production.ts   (all three PROVIDERS.*)
 This is the **canonical source of provider identity**. Every comparison, every lookup, every registration key flows from here. If you add a new provider, you add one entry here and the `ProviderName` type updates automatically.
 
 > **Key Takeaway**
+>
 > - Provider names are the **keys** in the registry Map. They must be consistent everywhere.
 > - This file enforces that consistency at compile time, not just by convention.
 > - The `typeof`/`keyof/[]` pattern derives a union type from a constant object.
@@ -1609,6 +1909,7 @@ Two competing forces:
 2. **Grouped by provider** — `OPENAI_MODELS`, `OPENROUTER_MODELS`, `GEMINI_MODELS`. Each provider owns its set of model IDs.
 
 The grouped approach wins because:
+
 - It **mirrors the file structure** — `google.ts` imports `GEMINI_MODELS`, `openai.ts` imports `OPENAI_MODELS`, `openrouter.ts` imports `OPENROUTER_FALLBACK_MODELS`.
 - It's **extensible** — if Google adds a "thinking" model variant, you add a key to `GEMINI_MODELS` — no changes elsewhere.
 - It's **self-documenting** — the comment `// OpenRouter Free Models (as of August 2026)` tells you these are real model IDs from a real source.
@@ -1641,6 +1942,7 @@ models.ts ──► providers/openrouter.ts (OPENROUTER_FALLBACK_MODELS)
 This is the **last layer of pure data**. Nothing in `models.ts` imports from any other file in the project. It is the bottom of the dependency pyramid — if these constants are wrong, everything above is wrong, but if they're right, everything below can build on solid ground.
 
 > **Key Takeaway**
+>
 > - Model names are strings, but grouping them in `as const` objects makes them type-safe and self-documenting.
 > - The fallback chain is a **derived array** — it pulls values from the model objects, so there's a single source of truth per model ID.
 > - These are the **leaf constants** — the foundation that everything else builds on.
@@ -1713,6 +2015,7 @@ export type ProviderResult = {
 ```
 
 Wraps two things:
+
 - `model: LanguageModelV4` — The actual model object you call `.generateText()`, `.streamText()`, etc. on.
 - `modelId?: string` — The string identifier of which model was selected (e.g., `"gemini-3.5-flash"`). Optional because not every provider needs to expose it; it's primarily for debugging and error messages.
 
@@ -1728,13 +2031,13 @@ export type Provider = {
 };
 ```
 
-This is the abstract contract from Part 1. Every concrete provider implements this exact shape. The registry doesn't care *how* a provider works — it only cares that it has these three members:
+This is the abstract contract from Part 1. Every concrete provider implements this exact shape. The registry doesn't care _how_ a provider works — it only cares that it has these three members:
 
-| Member | Purpose | Called by |
-|--------|---------|-----------|
-| `name` | The key under which this provider is stored | `registry.set(provider.name, ...)` |
-| `isConfigured()` | Quick boolean check: "Is the API key present?" | Router, before calling `getModel()` |
-| `getModel()` | Actually create and return a model object | Router, when this provider is the active choice |
+| Member           | Purpose                                        | Called by                                       |
+| ---------------- | ---------------------------------------------- | ----------------------------------------------- |
+| `name`           | The key under which this provider is stored    | `registry.set(provider.name, ...)`              |
+| `isConfigured()` | Quick boolean check: "Is the API key present?" | Router, before calling `getModel()`             |
+| `getModel()`     | Actually create and return a model object      | Router, when this provider is the active choice |
 
 The `null` return on `getModel()` is the **silent failure** pattern. If a provider can't produce a model (e.g., invalid model name at runtime), it returns `null` instead of throwing. The router moves on to the next provider. This enables **automatic failover** without try/catch in the router.
 
@@ -1745,6 +2048,7 @@ const registry = new Map<string, Provider>();
 ```
 
 `registry` is **module-scoped**. This means:
+
 1. It is created **once** when this module is first imported.
 2. It is **shared by all importers** — exactly one registry instance in the entire application.
 3. It is **not exported** — nobody can directly manipulate it. They can only interact through the exported functions.
@@ -1799,7 +2103,7 @@ export function listRegisteredProviders(): string[] {
 }
 ```
 
-Used **only for error messages** in `model-router.ts` (line 69). When the router exhausts all providers, it includes what *is* registered so the developer can debug: *"Registered providers: [google, openrouter]"*.
+Used **only for error messages** in `model-router.ts` (line 69). When the router exhausts all providers, it includes what _is_ registered so the developer can debug: _"Registered providers: [google, openrouter]"_.
 
 ### Import direction (the critical decoupling)
 
@@ -1813,6 +2117,7 @@ provider-registry.ts ◄──reads── model-router.ts
 The **router imports the registry, NOT the providers**. The router says: "give me whatever is registered under the name `'google'`." Search `model-router.ts` and you'll find zero `import { googleProvider }`. The router has zero knowledge of the concrete provider files.
 
 > **Key Takeaway**
+>
 > - The registry is a **singleton Map** at module scope — one instance, shared everywhere.
 > - `import type` imports are erased at compile time — zero runtime overhead, prevents circular deps.
 > - Type predicates (`(p): p is Provider`) let TypeScript narrow union types inside filter callbacks.
@@ -1899,6 +2204,7 @@ export function isGeminiConfigured(): boolean {
 ```
 
 Two checks:
+
 1. **`typeof GOOGLE_API_KEY === "string"`** — `process.env.X` returns `string | undefined`. If the env var isn't set, it's `undefined`. This ensures we have a string.
 2. **`GOOGLE_API_KEY.trim().length > 0`** — Ensures the key isn't empty or whitespace-only. An env var set to `"   "` (spaces) would pass check 1 but fail check 2.
 
@@ -1973,6 +2279,7 @@ export function createGeminiModel() {
 - This is a **backwards compatibility shim** — old code calling `createGeminiModel()` directly still works, while internally routing through the new provider pattern.
 
 > **Key Takeaway**
+>
 > - Provider imports `Provider` via `import type` (no runtime circular dep), constants via runtime imports.
 > - `isConfigured()` is a fast pre-check; `getModel()` is the actual model factory. Separating them is the **lazy initialization** pattern.
 > - Returning `null` from `getModel()` when unconfigured is a **clean signal** that the router skips.
@@ -2023,10 +2330,10 @@ export function createOpenAIModel() {
 ### Lines 1-4: Imports — same pattern, different provider
 
 ```ts
-import { createOpenAI } from "@ai-sdk/openai";     // runtime: SDK factory function
-import type { Provider } from "../router/provider-registry";  // type-only: contract
-import { PROVIDERS } from "../constants/providers";           // runtime: "openai"
-import { OPENAI_MODELS } from "../constants/models";          // runtime: "gpt-4o-mini"
+import { createOpenAI } from "@ai-sdk/openai"; // runtime: SDK factory function
+import type { Provider } from "../router/provider-registry"; // type-only: contract
+import { PROVIDERS } from "../constants/providers"; // runtime: "openai"
+import { OPENAI_MODELS } from "../constants/models"; // runtime: "gpt-4o-mini"
 ```
 
 **Same structure as `google.ts`** — this is the **contract working**. Both providers follow the exact same import pattern: one SDK import, one type import, two constant imports. This uniformity is intentional and makes the system predictable.
@@ -2042,6 +2349,7 @@ export function isOpenAIConfigured(): boolean {
 ```
 
 Compare with Google:
+
 ```ts
 const GOOGLE_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 export function isGeminiConfigured(): boolean { ... }
@@ -2053,7 +2361,7 @@ export function isGeminiConfigured(): boolean { ... }
 
 ```ts
 function createOpenAIProviderInstance() {
-  if (!isOpenAIConfigured()) return null;  // ← NOTE: null check here too
+  if (!isOpenAIConfigured()) return null; // ← NOTE: null check here too
   return createOpenAI({
     apiKey: OPENAI_API_KEY,
     name: "openai",
@@ -2064,6 +2372,7 @@ function createOpenAIProviderInstance() {
 **Key difference from Google**: Google's `createGoogleProviderInstance` does **not** check `isConfigured()` — it just creates the instance. OpenAI's version **does** check and returns `null` if not configured.
 
 Why the difference? In Google's `getModel()`, the configuration check happens at the top:
+
 ```ts
 getModel: () => {
   if (!isGeminiConfigured()) return null;  // checked here
@@ -2073,6 +2382,7 @@ getModel: () => {
 ```
 
 In OpenAI's `getModel()`, the check is deferred to `createOpenAIProviderInstance()`:
+
 ```ts
 getModel: () => {
   const inst = createOpenAIProviderInstance();  // checks internally, may return null
@@ -2093,7 +2403,7 @@ export const openaiProvider: Provider = {
     const inst = createOpenAIProviderInstance();
     if (!inst) return null;
     return {
-      model: inst.chat(OPENAI_MODELS.DEFAULT),    // "gpt-4o-mini"
+      model: inst.chat(OPENAI_MODELS.DEFAULT), // "gpt-4o-mini"
       modelId: OPENAI_MODELS.DEFAULT,
     };
   },
@@ -2101,6 +2411,7 @@ export const openaiProvider: Provider = {
 ```
 
 Identical structure to `googleProvider`:
+
 - `name` uses `PROVIDERS.OPENAI`
 - `isConfigured` delegates to the health check
 - `getModel` lazily creates the instance, calls `.chat()` with the default model
@@ -2110,6 +2421,7 @@ The only difference is the constants used: `OPENAI_MODELS.DEFAULT` instead of `G
 ### Lines 34-37: Backwards-compat helper
 
 Same pattern as Google:
+
 ```ts
 export function createOpenAIModel() {
   return openaiProvider.getModel()?.model ?? null;
@@ -2117,8 +2429,9 @@ export function createOpenAIModel() {
 ```
 
 > **Key Takeaway**
+>
 > - `openai.ts` mirrors `google.ts` exactly — this **proves the contract works**. Same shape, same interface, different constants.
-> - The OpenAI provider wraps the `null` check inside `createOpenAIProviderInstance()` rather than in `getModel()`. Both are valid; the contract only cares about the *external* behavior (return `ProviderResult | null`), not the internal organization.
+> - The OpenAI provider wraps the `null` check inside `createOpenAIProviderInstance()` rather than in `getModel()`. Both are valid; the contract only cares about the _external_ behavior (return `ProviderResult | null`), not the internal organization.
 
 ---
 
@@ -2163,7 +2476,10 @@ export const openrouterProvider: Provider = {
         const model = inst.chat(modelId);
         return { model, modelId };
       } catch (error) {
-        console.warn(`OpenRouter model ${modelId} failed to initialize:`, error instanceof Error ? error.message : String(error));
+        console.warn(
+          `OpenRouter model ${modelId} failed to initialize:`,
+          error instanceof Error ? error.message : String(error),
+        );
         continue;
       }
     }
@@ -2182,7 +2498,7 @@ export function createOpenRouterModel(modelId: string) {
 ### Lines 1-4: Imports — note the shared SDK
 
 ```ts
-import { createOpenAI } from "@ai-sdk/openai";  // ← SAME SDK factory as OpenAI!
+import { createOpenAI } from "@ai-sdk/openai"; // ← SAME SDK factory as OpenAI!
 import type { Provider } from "../router/provider-registry";
 import { PROVIDERS } from "../constants/providers";
 import { OPENROUTER_FALLBACK_MODELS } from "../constants/models";
@@ -2209,7 +2525,7 @@ const OPENROUTER_BASE_URL =
 - `OPENROUTER_BASE_URL` — Uses **optional chaining** (`?.`) + **logical OR** (`||`):
   1. `process.env.OPENROUTER_BASE_URL?.trim()` — If the env var exists, trim it. If `undefined`, the whole expression is `undefined` (thanks to `?.`).
   2. `... || OPENROUTER_DEFAULT_BASE_URL` — If left side is falsy (`undefined`, empty string), fall back to the default URL.
-  This allows overriding the OpenRouter endpoint (useful for testing/proxies/self-hosted) while defaulting to production.
+     This allows overriding the OpenRouter endpoint (useful for testing/proxies/self-hosted) while defaulting to production.
 
 ### Lines 27-60: `openrouterProvider` — the fallback chain
 
@@ -2291,6 +2607,7 @@ export function createOpenRouterModel(modelId: string) {
 Note this takes a `modelId` parameter — unlike Google/OpenAI helpers which use the default. Because OpenRouter supports many models, a caller might want a specific one. Returns the raw `LanguageModelV4` directly (not wrapped in `ProviderResult`).
 
 > **Key Takeaway**
+>
 > - OpenRouter reuses `createOpenAI` because it's OpenAI-compatible — only `baseURL` differs.
 > - The fallback loop: try one model, catch errors, `continue` to next. First success wins.
 > - `console.warn` per failure, `console.error` for total failure — but still returns `null`.
@@ -2347,11 +2664,13 @@ Runtime import — brings the actual string values (`"google"`, `"openrouter"`, 
 ### The `providerOrder` arrays — the Strategy in data form
 
 **development**: `[PROVIDERS.GOOGLE, PROVIDERS.OPENROUTER]`
+
 - Try Google first (free tier during development).
 - Fall back to OpenRouter (free models during development).
 - OpenAI is **not** in the list — because in development you want free options.
 
 **production**: `[PROVIDERS.OPENAI, PROVIDERS.OPENROUTER, PROVIDERS.GOOGLE]`
+
 - Try OpenAI first (paid, high-quality, most reliable for production).
 - Fall back to OpenRouter (free/paid, OpenAI-compatible).
 - Fall back to Google (gemini, as last resort).
@@ -2360,13 +2679,14 @@ Runtime import — brings the actual string values (`"google"`, `"openrouter"`, 
 
 ```ts
 // What the code does:
-providerOrder: [PROVIDERS.GOOGLE, PROVIDERS.OPENROUTER]
+providerOrder: [PROVIDERS.GOOGLE, PROVIDERS.OPENROUTER];
 
 // vs. what it could have done:
-providerOrder: ["google", "openrouter"]
+providerOrder: ["google", "openrouter"];
 ```
 
 Using `PROVIDERS.GOOGLE` instead of the raw string `"google"` means:
+
 - If someone misspells it, TypeScript catches it (it's an autocomplete-assisted constant, not a free-form string).
 - If you rename a provider, you change it in one place (`providers.ts`) and all references update.
 - It visually documents that these are provider names from the canonical `PROVIDERS` object.
@@ -2374,6 +2694,7 @@ Using `PROVIDERS.GOOGLE` instead of the raw string `"google"` means:
 ### How this enables the Strategy pattern
 
 The router code is **identical** regardless of environment. It always does:
+
 1. Get the policy for the environment.
 2. Loop through `policy.providerOrder`.
 3. Try each provider.
@@ -2381,6 +2702,7 @@ The router code is **identical** regardless of environment. It always does:
 The **only thing that changes** between dev and prod is the data in `providerOrder`. This is the Strategy pattern: **the algorithm is fixed; the strategy (data) varies.**
 
 > **Key Takeaway**
+>
 > - Policies are **pure data** — no logic, just a name and an ordered list of provider names.
 > - Development policy has 2 providers (free options); production has 3 (paid options first).
 > - Using `PROVIDERS.*` constants instead of raw strings gives compile-time safety.
@@ -2401,10 +2723,13 @@ export type ModelPolicy = {
   providerOrder: ProviderName[]; // ordered list of provider names
 };
 
-export function getPolicyForEnvironment(env: Environment | undefined): ModelPolicy {
-  const environment = env === ENVIRONMENTS.PRODUCTION
-    ? ENVIRONMENTS.PRODUCTION
-    : ENVIRONMENTS.DEVELOPMENT;
+export function getPolicyForEnvironment(
+  env: Environment | undefined,
+): ModelPolicy {
+  const environment =
+    env === ENVIRONMENTS.PRODUCTION
+      ? ENVIRONMENTS.PRODUCTION
+      : ENVIRONMENTS.DEVELOPMENT;
 
   return environment === ENVIRONMENTS.PRODUCTION
     ? productionPolicy
@@ -2450,10 +2775,13 @@ This is the **Strategy interface**. It defines the shape that every policy must 
 ### Lines 11-15: `getPolicyForEnvironment` — the strategy selector
 
 ```ts
-export function getPolicyForEnvironment(env: Environment | undefined): ModelPolicy {
-  const environment = env === ENVIRONMENTS.PRODUCTION
-    ? ENVIRONMENTS.PRODUCTION
-    : ENVIRONMENTS.DEVELOPMENT;
+export function getPolicyForEnvironment(
+  env: Environment | undefined,
+): ModelPolicy {
+  const environment =
+    env === ENVIRONMENTS.PRODUCTION
+      ? ENVIRONMENTS.PRODUCTION
+      : ENVIRONMENTS.DEVELOPMENT;
 
   return environment === ENVIRONMENTS.PRODUCTION
     ? productionPolicy
@@ -2466,9 +2794,10 @@ This function embodies two key design decisions:
 **Decision 1: Default to development**
 
 ```ts
-const environment = env === ENVIRONMENTS.PRODUCTION
-  ? ENVIRONMENTS.PRODUCTION
-  : ENVIRONMENTS.DEVELOPMENT;
+const environment =
+  env === ENVIRONMENTS.PRODUCTION
+    ? ENVIRONMENTS.PRODUCTION
+    : ENVIRONMENTS.DEVELOPMENT;
 ```
 
 If `env` is `"production"`, use production. If `env` is **anything else** (including `undefined`, `"development"`, `"staging"`, etc.), default to **development**. This is a **safe fallback**: development policies use free/cheap providers, so if you're unsure or not in production, you won't accidentally charge money.
@@ -2484,6 +2813,7 @@ return environment === ENVIRONMENTS.PRODUCTION
 Two environments → two policies → a single ternary. This is intentionally simple. If we had more environments (staging, qa, etc.), this is where we'd replace the ternary with a lookup table or switch statement.
 
 **What would break if removed?** The router imports `ModelPolicy` and `getPolicyForEnvironment` from here. Without this file, the router has no way to:
+
 - Know the shape of a policy (no `ModelPolicy` type)
 - Select a policy for a given environment (no `getPolicyForEnvironment`)
 
@@ -2498,6 +2828,7 @@ Re-exports the two policies so consumers can import them directly from `./polici
 **Who uses these re-exports?** Potentially tests, or code that wants to explicitly select a policy outside the environment-based default. The router itself doesn't use these directly — it goes through `getPolicyForEnvironment`.
 
 > **Key Takeaway**
+>
 > - `ModelPolicy` is the **Strategy interface** — just a name + ordered provider list.
 > - `getPolicyForEnvironment` defaults to development (safe: don't charge in non-prod).
 > - `ProviderName[]` (not `string[]`) in the type catches typos at compile time.
@@ -2589,6 +2920,7 @@ export { registerProvider } from "./provider-registry";
 Re-exports `registerProvider` so external code (e.g., plugins, tests) can register custom providers through the same path: `import { registerProvider } from "@/ai"` → register-providers.ts → provider-registry.ts.
 
 > **Key Takeaway**
+>
 > - `register-providers.ts` is the **only** file that imports concrete provider implementations.
 > - The idempotency guard (`builtInProvidersRegistered`) prevents double-registration.
 > - Called once at app bootstrap (via `ai/index.ts`), but safe to call multiple times.
@@ -2620,7 +2952,9 @@ export type RoutingResult = {
   modelId?: string;
 };
 
-function resolveEnvironment(context?: ModelRouterContext): ModelRouterEnvironment {
+function resolveEnvironment(
+  context?: ModelRouterContext,
+): ModelRouterEnvironment {
   if (context?.environment === ENVIRONMENTS.PRODUCTION)
     return ENVIRONMENTS.PRODUCTION;
   if (context?.environment === ENVIRONMENTS.DEVELOPMENT)
@@ -2717,6 +3051,7 @@ export type RoutingResult = {
 **`ModelRouterContext`** — The input to `getModel()` and `getRoutingResult()`. Currently only has one field: `environment?`. This allows the caller to explicitly specify which environment's policy to use. If omitted, the router auto-detects via `process.env.NODE_ENV`.
 
 **`RoutingResult`** — The full output of the routing decision. It includes:
+
 - `model: LanguageModelV4` — The actual model object to use.
 - `provider: string` — Which provider was selected (e.g., `"google"`, `"openrouter"`).
 - `modelId?: string` — Which specific model was selected (e.g., `"gemini-3.5-flash"`).
@@ -2726,7 +3061,9 @@ This is richer than what `getModel()` returns (just the `LanguageModelV4`). The 
 ### Lines 22-32: `resolveEnvironment` — the decision function
 
 ```ts
-function resolveEnvironment(context?: ModelRouterContext): ModelRouterEnvironment {
+function resolveEnvironment(
+  context?: ModelRouterContext,
+): ModelRouterEnvironment {
   if (context?.environment === ENVIRONMENTS.PRODUCTION)
     return ENVIRONMENTS.PRODUCTION;
   if (context?.environment === ENVIRONMENTS.DEVELOPMENT)
@@ -2773,6 +3110,7 @@ export class ModelRouter {
 **Why `await` inside?** Because `getRoutingResult()` is `async` (returns a Promise), we must `await` it before accessing `.model`. The `await` suspends this function until the routing is complete.
 
 > **Key Takeaway**
+>
 > - `ModelRouterEnvironment` is a type alias — a facade so consumers don't need to import from constants.
 > - `ModelRouterContext` has an optional `environment` field — explicit override capability.
 > - `RoutingResult` includes provider and modelId metadata (richer than just the model).
@@ -2825,9 +3163,9 @@ This is the **core algorithm** — the execution engine that follows the Strateg
 #### Step 1-3: Resolve environment → policy → providers
 
 ```ts
-const environment = resolveEnvironment(context);           // "production" or "development"
-const policy: ModelPolicy = getPolicyForEnvironment(environment);  // The strategy data
-const providers: Provider[] = getProvidersByNames(policy.providerOrder);  // → [Provider, Provider, ...]
+const environment = resolveEnvironment(context); // "production" or "development"
+const policy: ModelPolicy = getPolicyForEnvironment(environment); // The strategy data
+const providers: Provider[] = getProvidersByNames(policy.providerOrder); // → [Provider, Provider, ...]
 ```
 
 This is a **3-level transformation chain**:
@@ -2860,9 +3198,11 @@ const errors: Array<Error | string> = [];
 This array collects errors from providers that **throw** during `getModel()`. But note: most failures are handled by returning `null` (not throwing), so this array is usually empty. It's a **safety net** for unexpected runtime errors.
 
 **Why `Array<Error | string>`?** Because JavaScript's `catch` clause catches `unknown` in strict TypeScript. We convert every caught value to either an `Error` object or a `string`:
+
 ```ts
 errors.push(err instanceof Error ? err : String(err));
 ```
+
 This normalizes the error types so we can `.join("; ")` them later in the error message.
 
 #### Step 5: The routing loop — the failover engine
@@ -2871,11 +3211,12 @@ This normalizes the error types so we can `.join("; ")` them later in the error 
 for (const prov of providers) {
   try {
     if (!prov.isConfigured()) {
-      continue;              // ← Skip: provider not configured
+      continue; // ← Skip: provider not configured
     }
     const result = prov.getModel();
     if (result) {
-      return {              // ← SUCCESS: return the model
+      return {
+        // ← SUCCESS: return the model
         model: result.model,
         provider: prov.name,
         modelId: result.modelId,
@@ -2883,19 +3224,19 @@ for (const prov of providers) {
     }
     // ← null result: try next provider
   } catch (err) {
-    errors.push(err instanceof Error ? err : String(err));  // ← Error: collect and continue
+    errors.push(err instanceof Error ? err : String(err)); // ← Error: collect and continue
   }
 }
 ```
 
 The loop implements **3 possible outcomes per provider**:
 
-| Outcome | How | What happens |
-|---------|-----|-------------|
-| **Not configured** | `isConfigured()` returns `false` | `continue` — skip to next provider silently |
-| **Configured but failed** | `getModel()` returns `null` | Fall through to next iteration — no error recorded |
-| **Configured but threw** | `getModel()` throws | Caught by `catch`, error collected, continue to next |
-| **Success** | `getModel()` returns a `ProviderResult` | **Return immediately** with the model |
+| Outcome                   | How                                     | What happens                                         |
+| ------------------------- | --------------------------------------- | ---------------------------------------------------- |
+| **Not configured**        | `isConfigured()` returns `false`        | `continue` — skip to next provider silently          |
+| **Configured but failed** | `getModel()` returns `null`             | Fall through to next iteration — no error recorded   |
+| **Configured but threw**  | `getModel()` throws                     | Caught by `catch`, error collected, continue to next |
+| **Success**               | `getModel()` returns a `ProviderResult` | **Return immediately** with the model                |
 
 **Why `continue` for unconfigured instead of throwing?** Because an unconfigured provider is an **expected state**, not an error. In development, only Google and OpenRouter might be set up — OpenAI is simply skipped, not an error. Throwing would make the entire system fragile.
 
@@ -2925,6 +3266,7 @@ If the loop completes without returning (all providers failed), we throw an **in
 **Why throw here?** Unlike per-provider `null` returns (which mean "try the next provider"), reaching this point means **all** providers were exhausted. There is no fallback left. Throwing is correct — the caller needs to know routing failed entirely.
 
 > **Key Takeaway**
+>
 > - The 3-step chain: `resolveEnvironment` → `getPolicyForEnvironment` → `getProvidersByNames` transforms context into a list of Provider objects.
 > - The loop has 4 outcomes per provider: skip (not configured), try-next (null), return (success), catch+collect (threw).
 > - Errors are collected silently during the loop — only surfaced if **all** providers fail.
@@ -3032,6 +3374,7 @@ registerBuiltInProviders() executes  (guarded: runs only once)
 **Why at module scope?** Automatic registration — the moment anything imports from `@/ai`, providers are registered. No manual setup step. The composition root is the only place that knows about both providers and the registry — everything else stays decoupled.
 
 > **Key Takeaway**
+>
 > - `index.ts` is the **barrel file** — clean imports (`@/ai`) instead of deep paths.
 > - `registerBuiltInProviders()` at module scope = automatic registration on first import.
 > - The composition root is the only file that imports both providers and the registry.
@@ -3211,6 +3554,7 @@ No code re-executes. registerBuiltInProviders() is NOT called again.
 ```
 
 > **Key Takeaway**
+>
 > - Registration happens **once** at first import of `@/ai`, via `registerBuiltInProviders()` at module scope.
 > - Node.js **module caching** ensures the import chain only runs once.
 > - The idempotency guard is a **belt-and-suspenders** safety: even if module caching were bypassed (unlikely), double registration is prevented.
@@ -3248,7 +3592,7 @@ No code re-executes. registerBuiltInProviders() is NOT called again.
 5. **Iteration 2**: `openrouterProvider` → `isConfigured() = true` → `getModel()` → first fallback model succeeds → **return**.
 6. **Iteration 3**: Never reached.
 
-**Result**: Caller gets OpenRouter's model, even though OpenAI was first. **Why doesn't it fail?** Unconfigured providers are silently skipped — the policy defines *priority order*, not *requirement*.
+**Result**: Caller gets OpenRouter's model, even though OpenAI was first. **Why doesn't it fail?** Unconfigured providers are silently skipped — the policy defines _priority order_, not _requirement_.
 
 ---
 
@@ -3287,16 +3631,17 @@ No code re-executes. registerBuiltInProviders() is NOT called again.
 5. **Iteration 2**: `openrouterProvider` → `isConfigured() = false` → `continue` (silently skipped).
 6. **Loop exits** — all providers exhausted.
 7. **Error path**:
-   - `registered = listRegisteredProviders().join(", ")` → `"google, openrouter, openai"` (all three are *registered*)
+   - `registered = listRegisteredProviders().join(", ")` → `"google, openrouter, openai"` (all three are _registered_)
    - `errors.length === 0` → `errorDetail = ""` (no errors thrown, just nulls returned)
    - **Throws**: `Error("ModelRouter failed to select a model for environment 'development'. Registered providers: [google, openrouter, openai].")`
 
 **Why this is correct**: The error message includes:
+
 - The environment (`'development'`) — which policy was used
 - Registered providers (`[google, openrouter, openai]`) — providers are registered but not configured
 - No error details (since no errors were thrown)
 
-This tells the developer: *"I'm in development mode, my providers are registered, but I probably forgot to set my API keys."*
+This tells the developer: _"I'm in development mode, my providers are registered, but I probably forgot to set my API keys."_
 
 ---
 
@@ -3313,6 +3658,7 @@ async getModel(context?: ModelRouterContext): Promise<LanguageModelV4> {
 The methods are `async` and return `Promise<>`, but `resolveEnvironment()`, `getPolicyForEnvironment()`, `getProvidersByNames()`, and `prov.getModel()` are all **synchronous**. So why `async`?
 
 **Future-proofing for async provider initialization.** The current providers read `process.env` synchronously, but a future provider might need to:
+
 - Fetch configuration from a remote API
 - Validate API keys asynchronously
 - Warm up a connection pool
@@ -3325,10 +3671,10 @@ By making the router `async` now, future async providers can be added **without 
 
 The router's loop has two failure channels:
 
-| Signal | Meaning | Router behavior |
-|--------|---------|----------------|
-| `null` return | "I'm not available — try the next" | Silently skip to next provider |
-| `throw` | "Something went wrong — try the next" | Catch, collect error, continue |
+| Signal        | Meaning                               | Router behavior                |
+| ------------- | ------------------------------------- | ------------------------------ |
+| `null` return | "I'm not available — try the next"    | Silently skip to next provider |
+| `throw`       | "Something went wrong — try the next" | Catch, collect error, continue |
 
 Providers return `null` for **expected** conditions (API key missing, env var not set). They throw for **unexpected** conditions (SDK initialization failed, model name is wrong).
 
@@ -3342,14 +3688,14 @@ This is **separation of concerns**: providers report **availability**, the route
 const errors: Array<Error | string> = [];
 // ... errors collected in catch blocks ...
 // ... only if ALL providers fail:
-throw new Error(... + (errors.length > 0 ? `Errors: ${errors.join("; ")}` : ""));
+throw new Error(...+(errors.length > 0 ? `Errors: ${errors.join("; ")}` : ""));
 ```
 
 The router **collects** errors silently and **only surfaces them** in the final thrown error (when all providers fail). Why not `console.error` each failure as it happens?
 
 Because the router's job is to **route**, not to **report**. If the first provider fails but the second succeeds, the caller never needs to know. Logging would create noise on every failover. Errors are only shown when there's a **total failure** and the developer needs to debug.
 
-Note: OpenRouter **does** log its own per-model failures (`console.warn`) inside `getModel()`. That's appropriate because those are internal to the provider — the provider is trying multiple models and the developer should see which ones failed. The router, by contrast, is trying different *providers* — if one fails and another succeeds, that's a **normal failover**, not a debugging signal.
+Note: OpenRouter **does** log its own per-model failures (`console.warn`) inside `getModel()`. That's appropriate because those are internal to the provider — the provider is trying multiple models and the developer should see which ones failed. The router, by contrast, is trying different _providers_ — if one fails and another succeeds, that's a **normal failover**, not a debugging signal.
 
 #### 21. Why not just use if-else statements instead of policies?
 
@@ -3365,18 +3711,21 @@ if (env === "production") {
 ```
 
 Problems with this approach:
+
 - **Violates Open/Closed Principle**: To add a new environment (staging), you must modify the router. Every new environment = new `if/else` branch.
 - **Hard to test**: You can't easily inject a fake policy. You'd have to mock env vars.
 - **Logic scattered**: Environment selection is mixed with provider iteration.
 - **Can't change dynamically**: The order is hardcoded; can't read it from a config file.
 
 With policies as data:
+
 - **Open/Closed**: Add a new environment = create a new policy file → no router changes.
 - **Testable**: Inject a fake policy object directly.
 - **Separated concerns**: Router executes; policy decides.
 - **Extensible**: `providerOrder` could come from a database in the future.
 
 > **Key Takeaway**
+>
 > - `async`/`Promise` is **future-proofing** — today's providers are sync, but tomorrow's might need async init.
 > - `null` = "not available" (expected, silent); `throw` = "error" (unexpected, collected). Separation of concerns.
 > - Errors collected silently, only surfaced on total failure — clean failover without noise.
@@ -3398,7 +3747,7 @@ export const PROVIDERS = {
   GOOGLE: "google",
   OPENROUTER: "openrouter",
   OPENAI: "openai",
-  ANTHROPIC: "anthropic",       // ← NEW
+  ANTHROPIC: "anthropic", // ← NEW
 } as const;
 ```
 
@@ -3425,7 +3774,9 @@ import { ANTHROPIC_MODELS } from "../constants/models";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 export function isAnthropicConfigured(): boolean {
-  return typeof ANTHROPIC_API_KEY === "string" && ANTHROPIC_API_KEY.trim().length > 0;
+  return (
+    typeof ANTHROPIC_API_KEY === "string" && ANTHROPIC_API_KEY.trim().length > 0
+  );
 }
 
 function createAnthropicProviderInstance() {
@@ -3459,7 +3810,7 @@ export function registerBuiltInProviders() {
   registerProvider(googleProvider);
   registerProvider(openrouterProvider);
   registerProvider(openaiProvider);
-  registerProvider(anthropicProvider);   // ← NEW
+  registerProvider(anthropicProvider); // ← NEW
   builtInProvidersRegistered = true;
 }
 ```
@@ -3475,13 +3826,13 @@ providerOrder: [PROVIDERS.ANTHROPIC, PROVIDERS.OPENAI, PROVIDERS.OPENROUTER, PRO
 
 **What stays unchanged?**
 
-| File | Status |
-|------|--------|
-| `provider-registry.ts` | **Unchanged** — the `Provider` type and registry functions never change. |
-| `model-router.ts` | **Unchanged** — the routing loop is provider-agnostic. |
-| `ai/index.ts` | Only needs to re-export new provider helpers (optional). |
-| `policies/index.ts` | **Unchanged** — `ModelPolicy` type doesn't change. |
-| `policies/development.ts` | **Unchanged** — unless you want Anthropic in dev. |
+| File                      | Status                                                                   |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `provider-registry.ts`    | **Unchanged** — the `Provider` type and registry functions never change. |
+| `model-router.ts`         | **Unchanged** — the routing loop is provider-agnostic.                   |
+| `ai/index.ts`             | Only needs to re-export new provider helpers (optional).                 |
+| `policies/index.ts`       | **Unchanged** — `ModelPolicy` type doesn't change.                       |
+| `policies/development.ts` | **Unchanged** — unless you want Anthropic in dev.                        |
 
 **The rule**: You only touch the files that are **unique** to the new provider. Everything else is generic and stays the same. This is the **Open/Closed Principle** in action.
 
@@ -3498,7 +3849,7 @@ providerOrder: [PROVIDERS.ANTHROPIC, PROVIDERS.OPENAI, PROVIDERS.OPENROUTER, PRO
 export const ENVIRONMENTS = {
   DEVELOPMENT: "development",
   PRODUCTION: "production",
-  STAGING: "staging",       // ← NEW
+  STAGING: "staging", // ← NEW
 } as const;
 ```
 
@@ -3523,14 +3874,17 @@ export const stagingPolicy: ModelPolicy = {
 // src/ai/policies/index.ts
 import { stagingPolicy } from "./staging";
 
-export function getPolicyForEnvironment(env: Environment | undefined): ModelPolicy {
+export function getPolicyForEnvironment(
+  env: Environment | undefined,
+): ModelPolicy {
   if (env === ENVIRONMENTS.PRODUCTION) return productionPolicy;
-  if (env === ENVIRONMENTS.STAGING) return stagingPolicy;       // ← NEW
+  if (env === ENVIRONMENTS.STAGING) return stagingPolicy; // ← NEW
   return developmentPolicy;
 }
 ```
 
 **What stays unchanged?**
+
 - `model-router.ts` — No changes. The router calls `getPolicyForEnvironment()` and gets back a `ModelPolicy`. It doesn't care how many environments exist.
 - The `ModelPolicy` type — Still just `{ name, providerOrder }`.
 - All provider implementations — Unchanged.
@@ -3579,6 +3933,7 @@ getModel: () => {
 4. **The contract stays the same** — `getModel()` still returns `ProviderResult | null`. The router doesn't need to change to support retries.
 
 > **Key Takeaway**
+>
 > - Adding a provider: 4 steps (constants, models, provider file, register). Router untouched.
 > - Adding an environment: 3 steps (constant, policy file, selector). Router untouched.
 > - Provider-specific logic (retries, rate-limit handling) lives **inside the provider**, not the router.
@@ -3627,13 +3982,18 @@ If you later want to use OpenRouter instead of Google, you have to find and chan
 
 ```ts
 // ❌ WRONG: provider-specific logic leaks into the router
-if (prov.name === "openrouter") { /* retry logic */ }
-if (prov.name === "google") { /* fallback logic */ }
+if (prov.name === "openrouter") {
+  /* retry logic */
+}
+if (prov.name === "google") {
+  /* fallback logic */
+}
 ```
 
 This destroys the abstraction. The router should be **generic** — it doesn't know or care what each provider is.
 
 > **Key Takeaway**
+>
 > - Always go through the router, never import providers directly.
 > - Always `await` async methods — `getModel()` returns a `Promise`.
 > - `null` from a provider = "skip me," not "error." Don't throw on it.
@@ -3644,62 +4004,65 @@ This destroys the abstraction. The router should be **generic** — it doesn't k
 
 ### How all 13 files connect (the complete picture)
 
-| # | File | Layer | Role | Imports from | Exports |
-|---|------|-------|------|-------------|---------|
-| 1 | `constants/environment.ts` | L1 | Env names | — | `ENVIRONMENTS`, `Environment` |
-| 2 | `constants/providers.ts` | L1 | Provider names | — | `PROVIDERS`, `ProviderName` |
-| 3 | `constants/models.ts` | L1 | Model IDs | — | `GEMINI_MODELS`, `OPENAI_MODELS`, `OPENROUTER_*` |
-| 4 | `router/provider-registry.ts` | L2 | Contract + Map lookup | `LanguageModelV4` (type), `ProviderName` (type) | `Provider`, `ProviderResult`, `registerProvider`, `getProvidersByNames` |
-| 5 | `providers/google.ts` | L3 | Google impl | `createGoogle`, `Provider` (type), `PROVIDERS`, `GEMINI_MODELS` | `googleProvider`, `isGeminiConfigured` |
-| 6 | `providers/openai.ts` | L3 | OpenAI impl | `createOpenAI`, `Provider` (type), `PROVIDERS`, `OPENAI_MODELS` | `openaiProvider`, `isOpenAIConfigured` |
-| 7 | `providers/openrouter.ts` | L3 | OpenRouter + fallback | `createOpenAI`, `Provider` (type), `PROVIDERS`, `OPENROUTER_FALLBACK_MODELS` | `openrouterProvider`, `isOpenRouterConfigured` |
-| 8 | `policies/development.ts` | L4 | Dev strategy | `ModelPolicy` (type), `PROVIDERS` | `developmentPolicy` |
-| 9 | `policies/production.ts` | L4 | Prod strategy | `ModelPolicy` (type), `PROVIDERS` | `productionPolicy` |
-| 10 | `policies/index.ts` | L4 | Policy type + selector | policies, `ENVIRONMENTS`, `ProviderName` (type) | `ModelPolicy`, `getPolicyForEnvironment` |
-| 11 | `router/register-providers.ts` | L5 | Registration bootstrap | `registerProvider`, all 3 providers | `registerBuiltInProviders` (idempotent) |
-| 12 | `router/model-router.ts` | L6 | Router class | `LanguageModelV4` (type), `ModelPolicy`, `getPolicyForEnvironment`, `getProvidersByNames`, `Provider` (type), `ENVIRONMENTS` | `ModelRouter`, `ModelRouterContext`, `RoutingResult` |
-| 13 | `ai/index.ts` | L7 | Composition root + barrel | `registerBuiltInProviders`, `ModelRouter`, all helpers | Everything re-exported + calls `registerBuiltInProviders()` |
+| #   | File                           | Layer | Role                      | Imports from                                                                                                                 | Exports                                                                 |
+| --- | ------------------------------ | ----- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 1   | `constants/environment.ts`     | L1    | Env names                 | —                                                                                                                            | `ENVIRONMENTS`, `Environment`                                           |
+| 2   | `constants/providers.ts`       | L1    | Provider names            | —                                                                                                                            | `PROVIDERS`, `ProviderName`                                             |
+| 3   | `constants/models.ts`          | L1    | Model IDs                 | —                                                                                                                            | `GEMINI_MODELS`, `OPENAI_MODELS`, `OPENROUTER_*`                        |
+| 4   | `router/provider-registry.ts`  | L2    | Contract + Map lookup     | `LanguageModelV4` (type), `ProviderName` (type)                                                                              | `Provider`, `ProviderResult`, `registerProvider`, `getProvidersByNames` |
+| 5   | `providers/google.ts`          | L3    | Google impl               | `createGoogle`, `Provider` (type), `PROVIDERS`, `GEMINI_MODELS`                                                              | `googleProvider`, `isGeminiConfigured`                                  |
+| 6   | `providers/openai.ts`          | L3    | OpenAI impl               | `createOpenAI`, `Provider` (type), `PROVIDERS`, `OPENAI_MODELS`                                                              | `openaiProvider`, `isOpenAIConfigured`                                  |
+| 7   | `providers/openrouter.ts`      | L3    | OpenRouter + fallback     | `createOpenAI`, `Provider` (type), `PROVIDERS`, `OPENROUTER_FALLBACK_MODELS`                                                 | `openrouterProvider`, `isOpenRouterConfigured`                          |
+| 8   | `policies/development.ts`      | L4    | Dev strategy              | `ModelPolicy` (type), `PROVIDERS`                                                                                            | `developmentPolicy`                                                     |
+| 9   | `policies/production.ts`       | L4    | Prod strategy             | `ModelPolicy` (type), `PROVIDERS`                                                                                            | `productionPolicy`                                                      |
+| 10  | `policies/index.ts`            | L4    | Policy type + selector    | policies, `ENVIRONMENTS`, `ProviderName` (type)                                                                              | `ModelPolicy`, `getPolicyForEnvironment`                                |
+| 11  | `router/register-providers.ts` | L5    | Registration bootstrap    | `registerProvider`, all 3 providers                                                                                          | `registerBuiltInProviders` (idempotent)                                 |
+| 12  | `router/model-router.ts`       | L6    | Router class              | `LanguageModelV4` (type), `ModelPolicy`, `getPolicyForEnvironment`, `getProvidersByNames`, `Provider` (type), `ENVIRONMENTS` | `ModelRouter`, `ModelRouterContext`, `RoutingResult`                    |
+| 13  | `ai/index.ts`                  | L7    | Composition root + barrel | `registerBuiltInProviders`, `ModelRouter`, all helpers                                                                       | Everything re-exported + calls `registerBuiltInProviders()`             |
 
 **Golden rule**: each layer imports only from layers **below** it (lower numbers). No lateral or upward imports.
 
 ### Clear mental models
 
-| Component | Like a... | Why |
-|-----------|-----------|-----|
-| **The Registry** | A warehouse | You put providers in by name ("google" → google shelf), router asks the warehouse for a specific shelf. Warehouse doesn't care what's on the shelf. |
-| **The Router** | An air traffic controller | Planes (providers) have different availability. Controller tries preferred runway first, redirects if closed. Passenger (app) just wants to land. |
-| **The Policy** | A recipe | Says "try ingredient A first, then B, then C." Chef (router) follows the recipe. Change the recipe = no code changes. |
-| **Providers** | Specialized workers | Each has a badge (name), self-check (isConfigured), and specialty (getModel). They hide their tools. |
-| **`as const`** | A precision stamp | Stamps the type as "literal" so TypeScript knows the exact value, not "some string." |
-| **`import type`** | A blueprint | Blueprint (type) gets torn up after construction — zero runtime weight. |
-| **Type predicate** | A bouncer | `(p): p is Provider` checks IDs: "You're `Provider \| undefined`? `undefined` — stay out. `Provider` — come through." |
-| **Idempotency guard** | A "seen" stamp | Second call? "Already done, skip it." |
+| Component             | Like a...                 | Why                                                                                                                                                 |
+| --------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The Registry**      | A warehouse               | You put providers in by name ("google" → google shelf), router asks the warehouse for a specific shelf. Warehouse doesn't care what's on the shelf. |
+| **The Router**        | An air traffic controller | Planes (providers) have different availability. Controller tries preferred runway first, redirects if closed. Passenger (app) just wants to land.   |
+| **The Policy**        | A recipe                  | Says "try ingredient A first, then B, then C." Chef (router) follows the recipe. Change the recipe = no code changes.                               |
+| **Providers**         | Specialized workers       | Each has a badge (name), self-check (isConfigured), and specialty (getModel). They hide their tools.                                                |
+| **`as const`**        | A precision stamp         | Stamps the type as "literal" so TypeScript knows the exact value, not "some string."                                                                |
+| **`import type`**     | A blueprint               | Blueprint (type) gets torn up after construction — zero runtime weight.                                                                             |
+| **Type predicate**    | A bouncer                 | `(p): p is Provider` checks IDs: "You're `Provider \| undefined`? `undefined` — stay out. `Provider` — come through."                               |
+| **Idempotency guard** | A "seen" stamp            | Second call? "Already done, skip it."                                                                                                               |
 
 ### Design Principles in Action
 
-| Principle | Where it lives |
-|-----------|----------------|
-| **Dependency Inversion** | Router depends on `Provider` (interface), not `googleProvider` (implementation) |
-| **Open/Closed** | Adding a provider → touch 4 files. Router untouched. |
-| **Single Responsibility** | Registry = lookup. Providers = API calls. Policies = strategy data. Router = orchestration. |
-| **Separation of Concerns** | Error collection (router) vs. logging (provider). Routing (router) vs. strategy (policy). |
-| **Composition Root** | `index.ts` is the only place that wires concrete providers into the abstract registry |
+| Principle                  | Where it lives                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------- |
+| **Dependency Inversion**   | Router depends on `Provider` (interface), not `googleProvider` (implementation)             |
+| **Open/Closed**            | Adding a provider → touch 4 files. Router untouched.                                        |
+| **Single Responsibility**  | Registry = lookup. Providers = API calls. Policies = strategy data. Router = orchestration. |
+| **Separation of Concerns** | Error collection (router) vs. logging (provider). Routing (router) vs. strategy (policy).   |
+| **Composition Root**       | `index.ts` is the only place that wires concrete providers into the abstract registry       |
 
 ### When to use this pattern (and when NOT to)
 
 **Use when:**
+
 - ✅ Multiple interchangeable services providing the same capability
 - ✅ Automatic failover between services needed
 - ✅ Services should be swappable without touching consumer code
 - ✅ Environment-specific routing strategies needed
 
 **Don't use when:**
+
 - ❌ Exactly one service, never changing (unnecessary indirection)
 - ❌ Need provider-specific APIs (abstraction hides features)
 - ❌ Microsecond-level performance critical (registry lookup overhead)
 - ❌ Services fundamentally different in capability
 
 > **Final Key Takeaway**
+>
 > - The Model Router is a **layered architecture**: constants → registry → providers → policies → registration → router → bootstrap.
 > - Each layer imports only from layers **below** it — no lateral or upward dependencies.
 > - The **composition root** (`index.ts`) is the only file that knows about **all** layers.
@@ -3708,316 +4071,5 @@ This destroys the abstraction. The router should be **generic** — it doesn't k
 </details>
 
 </details>
-
----
-
-# Responsibility of Each Layer
-
-## Next.js + tRPC
-
-Responsible for:
-
-- Receiving user prompts
-- Input validation
-- Triggering background jobs
-
-It should **never** execute long-running AI tasks.
-
----
-
-## Inngest
-
-Responsible for long-running execution.
-
-It manages:
-
-- Background jobs
-- Retries
-- Scheduling
-- Error recovery
-- Job orchestration
-
-It does **not** perform reasoning.
-
----
-
-## ToolLoopAgent
-
-This is the brain of the workflow.
-
-Its responsibility is:
-
-
-
-The agent continues until it decides the task is complete.
-
----
-
-## LLM
-
-The LLM is responsible **only for reasoning**.
-
-It decides:
-
-- Which tool should be called
-- In what order
-- With what arguments
-
-The model **never executes code directly**.
-
----
-
-## Custom Tools
-
-Every capability exposed to the AI is implemented as a normal TypeScript function.
-
-Examples:
-
-
-
-The model simply decides **when** to invoke them.
-
----
-
-## E2B
-
-E2B acts as the remote development machine.
-
-It is responsible for:
-
-- Creating isolated environments
-- Writing files
-- Running shell commands
-- Installing packages
-- Running development servers
-- Returning preview URLs
-
----
-
-# Dynamic Model Routing
-
-Instead of binding the agent to a single model, we introduce a dedicated **Model Router**.
-
-The agent never communicates directly with Gemini or OpenRouter.
-
-Instead:
-
-
-
-This makes the entire AI layer provider-agnostic.
-
----
-
-# Why a Model Router?
-
-The router gives us complete flexibility.
-
-It can:
-
-- Switch providers
-- Handle rate limits
-- Support future models
-- Select models dynamically
-
-without changing the rest of the application.
-
----
-
-# Runtime Failover
-
-One of the biggest improvements in our architecture is automatic provider failover.
-
-Example:
-
-
-
-The user never notices the switch.
-
-The agent simply continues.
-
----
-
-# Why This Works
-
-The conversation history is **owned by the ToolLoopAgent**, not by the AI provider.
-
-The provider is only responsible for generating the next reasoning step.
-
-Conceptually:
-
-
-
-Changing providers does **not** mean losing the conversation.
-
----
-
-# Runtime Memory vs Persistent Memory
-
-An important architectural distinction.
-
-## Runtime Memory
-
-Owned by ToolLoopAgent.
-
-Contains:
-
-- Messages
-- Tool calls
-- Tool results
-- Intermediate reasoning
-
-This memory exists **only while the current agent execution is running**.
-
-When the execution finishes, this memory disappears.
-
----
-
-## Persistent Memory
-
-Owned by our application.
-
-Stored inside PostgreSQL.
-
-Examples:
-
-- Projects
-- Generations
-- Conversations
-- Tool execution logs
-- Sandbox IDs
-- Generated files
-- Preview URLs
-
-Persistent memory allows users to:
-
-- Continue a project later
-- Replay generations
-- Resume failed executions
-- View previous agent activity
-
----
-
-# Why OpenRouter?
-
-During development we will primarily use OpenRouter's free models.
-
-Benefits:
-
-- Avoid Gemini free-tier rate limits.
-- Easily switch between different free models.
-- Provider-agnostic architecture.
-- No application code changes when switching providers.
-
-Only the router configuration changes.
-
----
-
-# Future Expansion
-
-The architecture allows adding any future provider without changing the agent.
-
-Examples:
-
-- Gemini
-- OpenRouter
-- Groq
-- OpenAI
-- Anthropic
-- xAI
-- DeepSeek
-
-The rest of the system remains identical.
-
----
-
-# Why We Like This Architecture
-
-Compared to using AgentKit directly, our architecture provides:
-
-- ✅ Completely provider agnostic
-- ✅ Free development workflow
-- ✅ Dynamic model failover
-- ✅ Clean separation of concerns
-- ✅ Modern Vercel AI SDK Agent API
-- ✅ Easy future migration to any provider
-- ✅ Full compatibility with Inngest
-- ✅ Easier debugging
-- ✅ Easier testing
-- ✅ Better understanding of autonomous agents
-
----
-
-# Core Mental Models
-
-## An agent is a loop
-
-
-
----
-
-## Inngest is **not** the agent
-
-Inngest is responsible for **running** the workflow.
-
-ToolLoopAgent is responsible for **thinking**.
-
----
-
-## The LLM is **not** the computer
-
-The model cannot:
-
-- create files
-- install packages
-- execute commands
-
-It only decides **which tool** should perform those actions.
-
----
-
-## Tools are normal TypeScript functions
-
-There is nothing magical about tools.
-
-A tool is simply a function that the AI is allowed to invoke.
-
----
-
-## The provider is replaceable
-
-The agent should never know whether it is talking to:
-
-- Gemini
-- OpenRouter
-- Claude
-- GPT
-- Groq
-
-Only the Model Router knows this.
-
----
-
-# Final Design Principles
-
-1. Keep the AI layer provider-agnostic.
-2. Separate reasoning from execution.
-3. Let ToolLoopAgent own the execution loop.
-4. Let Inngest own background processing.
-5. Let E2B own code execution.
-6. Let the Model Router own provider selection and failover.
-7. Persist project state in the database, not inside the agent.
-8. Build every capability as a reusable tool.
-9. Design for extensibility from day one.
-10. Optimize for understanding first, implementation second.
-
-> **Final Takeaway**
->
-> We are not building an application around a specific AI model.
->
-> We are building an autonomous coding platform where the **agent**, **model provider**, **execution environment**, and **background orchestration** are all independent, replaceable layers.
->
-> This modular architecture makes Vibe easier to maintain, cheaper to develop, and ready to adopt future AI models with minimal changes.
-
----
 
 _This README documents our current understanding. More sections will be added as we continue._
