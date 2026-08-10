@@ -1398,9 +1398,149 @@ This is why you can reuse `baseProcedure` for `hello`, `generateApp`, and `build
 
 ## Unit 6 — Context and Dependency Injection
 
-(See previous conversation — Units 6a and 6b)
-
 ### Status: ✅ Complete
+
+### Quick Refresher: What is a `ctx` object?
+
+Every tRPC procedure receives two things in its handler: `{ input, ctx }`.
+
+```ts
+// src/trpc/routers/project.ts
+build: baseProcedure
+  .mutation(async ({ input, ctx }) => {  // input = validated request data
+    // ctx = per-request context (userId, database client, etc.)
+  })
+```
+
+- **`input`** — the validated request payload (from Zod)
+- **`ctx`** — the per-request dependency bag (from `createTRPCContext`)
+
+---
+
+### The core question: Where does `ctx` come from?
+
+**Three things must be true for `ctx` to work:**
+
+1. **Someone creates it** — `createTRPCContext()` runs and produces `{ userId: 'user_123' }`
+2. **Someone calls it** — `fetchRequestHandler` (via the `createContext` option) or `createTRPCOptionsProxy`
+3. **Someone passes it** — the tRPC framework hands `ctx` to each procedure handler
+
+#### The wiring diagram
+
+```
+HTTP Request
+  ↓
+[trpc]/route.ts → fetchRequestHandler({ createContext: createTRPCContext })
+  ↓
+createTRPCContext() runs → returns { userId: 'user_123' }
+  ↓
+tRPC validates input against the procedure's Zod schema
+  ↓
+Handler runs: ({ input, ctx }) => { ... }
+  ↓
+ctx = { userId: 'user_123' } is passed in
+```
+
+The handler **never calls `createTRPCContext()`** itself. It just *receives* `ctx` from the framework. This is **dependency injection** — you don't create your dependencies, you receive them.
+
+---
+
+### Why context is dependency injection (not a global)
+
+**The problem with imports:**
+
+```ts
+// If we could import prisma into procedures directly:
+async ({ input }) => {
+  import { prisma } from "@/lib/db";
+  await prisma.project.create({ userId: "???", ... });
+}
+```
+
+There's no user ID. The procedure has no way to know who the current user is. And testing? You'd have to mock the global `prisma` instance — fragile and not isolated.
+
+**In our `createTRPCContext`:**
+
+```ts
+export const createTRPCContext = cache(async () => {
+  return { userId: 'user_123' };
+});
+```
+
+The `userId` is the **minimal dependency** injected into every procedure. Change `userId` here → every procedure sees the change. No global imports needed for the user concept.
+
+---
+
+### The two creation points
+
+In our codebase, `createTRPCContext` is referenced in **two places**:
+
+1. **HTTP path — `src/app/api/trpc/[trpc]/route.ts`:**
+```ts
+fetchRequestHandler({
+  endpoint: '/api/trpc',
+  req,
+  router: appRouter,
+  createContext: createTRPCContext,  // ← wired here
+});
+```
+
+2. **Server-component path — `src/trpc/server.tsx`:**
+```ts
+export const trpc = createTRPCOptionsProxy({
+  ctx: createTRPCContext,  // ← also wired here
+  router: appRouter,
+  queryClient: getQueryClient,
+});
+```
+
+**Same `createTRPCContext` function, two entry points.** The HTTP path is for Client Components calling over the network. The server path is for Server Components calling directly (no network hop). Both use the same factory — that's the design.
+
+---
+
+### Why `cache()` matters
+
+```ts
+export const createTRPCContext = cache(async () => {
+  return { userId: 'user_123' };
+});
+```
+
+**Without `cache()`,** if multiple procedures execute in a single request (via batching), you'd create **multiple context instances**. In a real app, that's **multiple DB connections** per request — wasteful and incorrect.
+
+`cache()` forces one context per request lifecycle — one DB connection, one user lookup, shared across all procedures in that request.
+
+**The timing:** `createTRPCContext()` runs **before** `input` validation and **before** the handler executes. So `ctx` is always ready when the handler needs it.
+
+---
+
+### What happens to `ctx` in OUR current code?
+
+Look at `src/trpc/routers/project.ts`:
+
+```ts
+build: baseProcedure
+  .input(z.object({ projectId: z.string().min(1), prompt: z.string().min(1) }))
+  .mutation(async ({ input }) => {         // ← notice: ctx is NOT destructured
+    await inngest.send({
+      name: BUILD_PROJECT_EVENT,
+      data: { projectId: input.projectId },
+    });
+    return { success: true };
+  }),
+```
+
+**`ctx` is created but never used here.** This is a development stub — the procedure only needs `input`. In a real app, it might do `ctx.prisma.project.create(...)` or `ctx.userId` for ownership tracking.
+
+**Why create `ctx` if we don't use it?** Future-proofing. The moment a procedure needs the database or user ID, it just destructures `ctx` — no wiring changes needed.
+
+---
+
+### Mental model
+
+> **`createTRPCContext()` = factory. The framework calls it once per request. `fetchRequestHandler` (HTTP path) or `createTRPCOptionsProxy` (server path) invokes it. The result (`ctx`) is injected into every procedure handler.**
+
+In the chain: `Request → createTRPCContext → ctx → { input, ctx }` in handler.
 
 ---
 
