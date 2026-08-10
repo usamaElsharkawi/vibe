@@ -1,87 +1,47 @@
 # tRPC Architecture — Complete Learning Curriculum
 
 **Project:** Vibe (Next.js 15 + React 19 + tRPC v11 + AI SDK v7 + Inngest + E2B)
-**Status:** Units 1–3 complete, 41 remaining
+**Status:** Units 1–6 complete, remaining units TBD
 **Approach:** Divide and conquer — one unit at a time, deep understanding, active recall
 
 ---
 
 ## Table of Contents
 
-- [Complete Roadmap (44 Units)](#complete-roadmap-44-units)
+- [Curriculum Overview](#curriculum-overview)
 - [Unit 1 — The Browser/Server Boundary](#unit-1--the-browserserver-boundary)
 - [Unit 2 — Compile-Time vs Runtime](#unit-2--compile-time-vs-runtime)
 - [Unit 3 — Remote Procedure Call (RPC)](#unit-3--remote-procedure-call-rpc)
+- [Unit 4 — The Fluent Builder Pattern (Standalone Deep Dive)](#unit-4--the-fluent-builder-pattern-standalone-deep-dive)
+- [Unit 5 — tRPC's Fluent Builder](#unit-5--trpcs-fluent-builder-connecting-the-pattern)
+- [Unit 6 — Context and Dependency Injection](#unit-6--context-and-dependency-injection)
 - [Sequence Diagram: Complete Flow](#sequence-diagram-complete-flow)
 
 ---
 
-## Complete Roadmap (44 Units)
+## Curriculum Overview
 
-### Layer 0 — The fundamental reality of the web
-1. The browser/server boundary: why they can't share memory
-2. HTTP request/response: the only bridge
-3. JSON serialization: what survives the trip and what doesn't
+This curriculum evolved organically as we studied the codebase. The original abstract roadmap (44 units across 10 layers) was replaced with the **actual units taught**, which reflect what the codebase actually requires understanding.
 
-### Layer 1 — The type safety problem
-4. Compile-time vs runtime: what TypeScript actually does
-5. Why TypeScript types vanish at runtime
-6. Why runtime validation is non-negotiable
-7. Zod: schemas as both validators and type factories
+### Completed Units
+1. **The Browser/Server Boundary** — HTTP, serialization, network isolation
+2. **Compile-Time vs Runtime** — TypeScript erasure, Zod validation
+3. **Remote Procedure Call (RPC)** — RPC vs REST, tRPC architecture
+4. **The Fluent Builder Pattern** — immutable builders, sealed objects (standalone theory)
+5. **tRPC's Fluent Builder** — mapping the pattern to `baseProcedure.input().mutation()`
+6. **Context and Dependency Injection** — `createTRPCContext`, per-request injection
 
-### Layer 2 — The RPC concept
-8. What "remote procedure call" means (vs REST)
-9. Why RPC frameworks exist
-10. What tRPC specifically provides
-
-### Layer 3 — tRPC's internal architecture
-11. `initTRPC.create()`: the factory and what it produces
-12. The `t` object: `t.procedure` and `t.router`
-13. `baseProcedure`: the typed building block
-14. `createTRPCRouter`: composing procedures into a tree
-15. Context in tRPC: what it is and why it's dependency injection
-16. `createTRPCContext`: who calls it, when, and where the result goes
-
-### Layer 4 — Our procedures
-17. Zod validation via `.input()`: runtime gate + compile-time typing
-18. `.query()` vs `.mutation()`: the semantic distinction
-19. `projectRouter`: a concrete example
-20. `appRouter`: the root composition and `AppRouter` type
-
-### Layer 5 — Serialization across the wire
-21. The JSON limitation: Dates, Maps, Sets, undefined
-22. SuperJSON: what it is and how it works
-23. The transformer: how tRPC wires SuperJSON in
-
-### Layer 6 — The HTTP adapter
-24. Next.js Route Handlers: the server entry point
-25. `fetchRequestHandler`: the tRPC/HTTP bridge
-26. How a raw HTTP request becomes a procedure invocation
-
-### Layer 7 — The client side
-27. `'use client'` and the RSC boundary
-28. `TRPCReactProvider`: why we need a React Context
-29. `useTRPC()`: how it gives you a typed client
-30. `httpBatchLink`: batching requests
-31. `useMutation`: the TanStack Query bridge
-
-### Layer 8 — TanStack Query
-32. What TanStack Query is (and isn't)
-33. QueryClient, QueryClientProvider, and the cache
-34. `staleTime` and cache invalidation
-35. Mutations vs queries in TanStack Query
-
-### Layer 9 — Server-side rendering
-36. `server.tsx` and `createTRPCOptionsProxy`
-37. Dehydration: serializing query state for RSC
-38. Hydration: restoring state on the client
-39. superjson in the dehydration/hydration pipeline
-
-### Layer 10 — Our complete architecture
-40. The full `project.build` trace, UI → Inngest
-41. tRPC's responsibility boundary vs Inngest's
-42. Why tRPC ends where Inngest begins
-43. The mental model that ties everything together
+### Upcoming Units (planned)
+7. Context in procedure handlers
+8. Authentication & authorization in tRPC
+9. Error handling in tRPC procedures
+10. SuperJSON serialization deep dive
+11. The tRPC HTTP adapter internals
+12. Client-side tRPC integration with React
+13. TanStack Query deep dive
+14. Server-side rendering with tRPC
+15. Dehydration and hydration pipeline
+16. Full end-to-end architecture trace
 
 ---
 
