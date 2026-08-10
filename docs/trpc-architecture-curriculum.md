@@ -1629,11 +1629,758 @@ sequenceDiagram
 
 ---
 
-## Next Steps
+## Unit 7 — Context in Procedure Handlers
 
-Continue with **Unit 7 — Context in procedure handlers and authentication** (the deeper application of dependency injection).
+### Status: ✅ Complete
+
+### Refresher: the `{ input, ctx }` signature
+
+Every tRPC procedure handler receives exactly two things:
+
+```ts
+.mutation(async ({ input, ctx }) => {
+  // input = Zod-validated request payload
+  // ctx   = per-request dependency bag (from createTRPCContext)
+})
+```
+
+### The key insight: `ctx` is always available, even if unused
+
+Look at our actual code:
+
+```ts
+// src/trpc/routers/project.ts
+build: baseProcedure
+  .input(z.object({ projectId: z.string().min(1), prompt: z.string().min(1) }))
+  .mutation(async ({ input }) => {     // ← NO ctx destructured
+    await inngest.send({
+      name: BUILD_PROJECT_EVENT,
+      data: { projectId: input.projectId }
+    });
+    return { success: true };
+  }),
+```
+
+**`ctx` is created and passed anyway** — just not used. This matters: `createTRPCContext()` runs before every request regardless. It's future-proofing. The moment a procedure needs `ctx.prisma` or `ctx.userId`, it destructures `ctx`.
 
 ---
 
-*Last updated: Units 1–6 complete (including builder pattern deep dive)*
-*Status: In progress*
+## Unit 8 — Authentication & Authorization in tRPC
+
+### Where auth lives
+
+Auth logic goes in **`createTRPCContext`** (`src/trpc/init.ts`) — NOT in individual procedure handlers.
+
+### Current state: stub
+
+```ts
+export const createTRPCContext = cache(async () => {
+  return { userId: 'user_123' };  // ← hardcoded stub
+});
+```
+
+### Production pattern
+
+```ts
+export const createTRPCContext = cache(async (opts: { req: Request }) => {
+  const session = await auth.api.getSession({
+    headers: opts.req.headers,
+  });
+  return {
+    db: prisma,
+    session,
+    userId: session?.user?.id,
+  };
+});
+```
+
+### Protected procedures
+
+Derive from `baseProcedure` with `.use()`:
+
+```ts
+export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+  if (!ctx.session || !ctx.userId) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
+  return next({
+    ctx: { session: ctx.session, userId: ctx.userId },
+  });
+});
+```
+
+### In our project
+
+We don't have auth yet. But the **architecture is ready**: `createTRPCContext` is the single injection point for sessions, and `protectedProcedure` would extend `baseProcedure`.
+
+---
+
+## Unit 9 — Error Handling in tRPC Procedures
+
+### The tRPC philosophy: throw, don't return error codes
+
+```ts
+// REST-style (avoid):
+return { error: "not found", data: null };
+
+// tRPC-style:
+throw new TRPCError({
+  code: TRPC_ERROR_CODE_KEY.NOT_FOUND,
+  message: "Project not found",
+});
+```
+
+### The error flow
+
+```
+Handler throws TRPCError({ code: 'BAD_REQUEST', message: '...' })
+  ↓
+tRPC catches → serializes to JSON (via SuperJSON)
+  ↓
+Client receives error on onError / isError
+  ↓
+error.message = "Project not found"
+error.data.code = "BAD_REQUEST"
+```
+
+### Error shape on the client
+
+```ts
+onError: (error) => {
+  error.message;      // "Project not found" (human-readable)
+  error.data?.code;   // "NOT_FOUND" (machine-readable)
+  error.data?.httpStatus;  // 404
+  error.data?.path;   // ["project", "build"]
+}
+```
+
+### In our codebase
+
+In `src/app/page.tsx`:
+```ts
+onError: (error) => {
+  toast.error(`Failed to trigger sandbox: ${error.message}`);
+}
+```
+
+The `error.message` is whatever `message` was on the `TRPCError`. If the Zod schema validation fails (e.g., `projectId` is a number instead of string), tRPC automatically throws a `TRPCError` with code `BAD_PARSE` and a descriptive message.
+
+---
+
+## Unit 10 — SuperJSON Serialization Deep Dive
+
+### The JSON problem
+
+`JSON.stringify()` cannot handle:
+- `new Date()` → ISO string
+- `BigInt(42)` → `TypeError` (throws!)
+- `new Map([["a", 1]])` → `{}`
+- `new Set([1, 2, 3])` → `{}`
+- `undefined` → dropped from objects
+
+### What SuperJSON does
+
+Wraps values with type metadata:
+```ts
+// What gets sent over the wire:
+{
+  "json": {
+    "createdAt": "1970-01-01T00:00:00.000Z",
+    "count": 42
+  },
+  "superjson": {
+    "createdAt": { "type": "Date", "value": "1970-01-01T00:00:00.000Z" }
+  }
+}
+```
+
+The client uses this metadata to reconstruct the original types.
+
+### How tRPC uses it
+
+In `src/trpc/init.ts`:
+```ts
+const t = initTRPC.create({
+  transformer: superjson,  // ← ALL procedures inherit this
+});
+```
+
+This means: procedure return values AND inputs are serialized/deserialized through SuperJSON.
+
+### Where it's configured on the client
+
+In `src/trpc/client.tsx`:
+```ts
+httpBatchLink({
+  transformer: superjson,  // ← MUST match server
+  url: getUrl(),
+})
+```
+
+**Critical rule:** The client's `transformer` **must** use the same library as the server. If the server uses SuperJSON and the client doesn't, deserialization fails silently.
+
+---
+
+## Unit 11 — The tRPC HTTP Adapter: `fetchRequestHandler`
+
+### The entry point
+
+File: `src/app/api/trpc/[trpc]/route.ts`
+```ts
+const handler = (req: Request) =>
+  fetchRequestHandler({
+    endpoint: '/api/trpc',
+    req,
+    router: appRouter,
+    createContext: createTRPCContext,
+  });
+
+export { handler as GET, handler as POST };
+```
+
+### What `fetchRequestHandler` actually does
+
+1. **Reads the HTTP body** — `await req.json()`
+2. **Extracts the request** — finds `path`, `input`, `id`, `jsonrpc` fields
+3. **Creates context** — calls `createContext()` (which is `createTRPCContext`)
+4. **Resolves the procedure** — walks the router tree using the path
+5. **Validates input** — runs Zod schema against the request data
+6. **Calls the handler** — invokes `async ({ input, ctx }) => { ... }`
+7. **Serializes response** — runs the return value through SuperJSON
+8. **Handles batching** — if multiple calls arrive in one POST, processes them all
+9. **Formats the response** — wraps in `{ jsonrpc: "2.0", id, result }` or error format
+
+### The three things this file passes
+
+| Option | What it does | Value in our code |
+|--------|-------------|-------------------|
+| `endpoint` | URL prefix to accept requests from | `'/api/trpc'` |
+| `router` | The procedure directory (tree) to look up | `appRouter` |
+| `createContext` | The factory function for per-request ctx | `createTRPCContext` |
+
+### What REST would require here
+
+In REST, you'd write one Route Handler per endpoint:
+
+```ts
+// REST equivalent — you'd need ONE FILE PER ENDPOINT
+export async function POST(req: Request) {
+  const body = await req.json();       // manual parsing
+  if (typeof body.projectId !== 'string') {
+    return new Response('Bad input', { status: 400 });  // manual validation
+  }
+  await inngest.send({ ... });
+  return Response.json({ success: true });  // manual serialization
+}
+```
+
+With tRPC, **one file handles everything**. Adding a new procedure means:
+1. Add it to the router tree → **no new HTTP endpoint needed**
+2. `fetchRequestHandler` automatically discovers it via the path
+
+---
+
+## Unit 12 — Client-Side tRPC Integration
+
+### The React Context providers
+
+File: `src/trpc/client.tsx`
+```ts
+export const { TRPCProvider, useTRPC } = createTRPCContext<AppRouter>();
+```
+
+**Important:** This `createTRPCContext` is from `@trpc/tanstack-react-query` — it's a **client-side** function, different from the `createTRPCContext` in `init.ts`.
+
+### The provider chain
+
+File: `src/app/layout.tsx`
+```tsx
+<TRPCReactProvider>
+  <html lang="en">
+    <body>{children}<Toaster /></body>
+  </html>
+</TRPCReactProvider>
+```
+
+The nesting:
+```
+QueryClientProvider (TanStack Query)
+  └── TRPCProvider (tRPC)
+        └── TRPCReactProvider (tRPC wrapper)
+              └── <html> → <body> → {children}
+```
+
+### How `useTRPC()` works
+
+In `src/app/page.tsx`:
+```ts
+const trpc = useTRPC();
+```
+
+This returns a **typed client** whose methods match `AppRouter`. TypeScript enforces that `trpc.project.build` exists and knows what arguments it accepts.
+
+### The `useTRPC()` call chain
+
+```
+useTRPC()
+  ↓
+Returns: typed client (from AppRouter type)
+  ↓
+trpc.project.build       → procedure reference
+  ↓
+.mutationOptions({...})  → wraps with TanStack Query mutation config
+  ↓
+useMutation(opts)         → returns { mutate, isPending, isSuccess, isError }
+  ↓
+invoke.mutate({...})      → triggers HTTP request via httpBatchLink
+```
+
+### The httpBatchLink
+
+In `client.tsx`:
+```ts
+const [trpcClient] = useState(() =>
+  createTRPCClient<AppRouter>({
+    links: [
+      httpBatchLink({
+        transformer: superjson,
+        url: getUrl(),   // → '/api/trpc'
+      }),
+    ],
+  }),
+);
+```
+
+**What httpBatchLink does:**
+1. Receives a procedure call (e.g., `project.build.mutate(...)`)
+2. Waits 5ms to collect other pending calls (batching)
+3. Serializes all calls into one JSON array
+4. Sets `Content-Type: application/json`
+5. Sends `POST /api/trpc` with the batched body
+6. Receives the batched response
+7. Resolves each individual promise
+
+**Batched request example:**
+```json
+[
+  { "id": 1, "method": "project.build", "params": {...} },
+  { "id": 2, "method": "hello", "params": {...} }
+]
+```
+
+### In our codebase
+
+`src/app/page.tsx`:
+```tsx
+const trpc = useTRPC();
+const invoke = useMutation(trpc.project.build.mutationOptions({
+  onSuccess: () => toast.success("..."),
+  onError: (error) => toast.error(`Failed: ${error.message}`),
+}));
+
+// Button click:
+invoke.mutate({ projectId: crypto.randomUUID(), prompt });
+```
+
+The full chain:
+```
+Button click
+  ↓
+invoke.mutate({ projectId, prompt })
+  ↓
+useMutation → mutationFn (from mutationOptions)
+  ↓
+httpBatchLink → POST /api/trpc
+  ↓
+fetchRequestHandler → finds appRouter.project.build
+  ↓
+Zod validation → inngest.send → { success: true }
+  ↓
+TanStack Query triggers onSuccess → toast.success
+```
+
+---
+
+## Unit 13 — TanStack Query Deep Dive
+
+### QueryClient configuration
+
+File: `src/trpc/query-client.ts`
+```ts
+export function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30 * 1000,   // 30 seconds
+      },
+      dehydrate: {
+        serializeData: superjson.serialize,
+        shouldDehydrateQuery: (query) =>
+          defaultShouldDehydrateQuery(query) || query.state.status === 'pending',
+      },
+      hydrate: {
+        deserializeData: superjson.deserialize,
+      },
+    },
+  });
+}
+```
+
+### `staleTime: 30_000`
+
+**What it means:** Data fetched from a query is considered "fresh" for 30 seconds. During that window, subsequent `useQuery` calls return cached data immediately — no refetch.
+
+**Important in our app:** All our current procedures are **mutations** — `project.build` is a mutation. Mutations are **not cached** by TanStack Query. So `staleTime` only matters for future **queries** we add.
+
+**Why we have it anyway:** When we add a query (e.g., `project.getById`), the 30-second staleTime means:
+- User visits page → fetch project data → cached
+- User navigates away → navigates back → cached (no refetch, 30s window)
+- After 30s → stale → refetches automatically
+
+### Client vs. server QueryClient lifecycle
+
+**Client side** (`src/trpc/client.tsx`):
+```ts
+let browserQueryClient: QueryClient;
+function getQueryClient() {
+  if (typeof window === 'undefined') {
+    return makeQueryClient();  // server: new each time
+  }
+  if (!browserQueryClient) browserQueryClient = makeQueryClient();  // browser: singleton
+  return browserQueryClient;
+}
+```
+
+- **Server renders:** new QueryClient per render (discarded after HTML sent)
+- **Client hydration:** existing `browserQueryClient` (persists across navigations)
+- **Purpose:** cache data in browser memory so refetches are avoided
+
+**Server side** (`src/trpc/server.tsx`):
+```ts
+export const getQueryClient = cache(makeQueryClient);
+```
+
+- **Server renders:** `cache()` ensures one QueryClient per React render cycle
+- **Purpose:** collect data fetched by procedures during SSR, then dehydrate it to the client
+
+### `makeQueryClient` is shared by both paths
+
+The **same factory** (`makeQueryClient` from `query-client.ts`) creates QueryClients for:
+1. The React Provider (client-side) — via `TRPCReactProvider` in `client.tsx`
+2. The server-side proxy — via `createTRPCOptionsProxy` in `server.tsx`
+
+This ensures **both sides use identical caching/serialization settings**.
+
+---
+
+## Unit 14 — Server-Side Rendering with tRPC
+
+### The server client
+
+File: `src/trpc/server.tsx`
+```ts
+import "server-only";
+import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
+import { cache } from 'react';
+import { createTRPCContext } from "./init";
+import { makeQueryClient } from "./query-client";
+import { appRouter } from "./routers/_app";
+import type { AppRouter } from "./routers/_app";
+
+export const getQueryClient = cache(makeQueryClient);
+
+export const trpc = createTRPCOptionsProxy({
+  ctx: createTRPCContext,
+  router: appRouter,
+  queryClient: getQueryClient,
+});
+```
+
+### How Server Components use it
+
+In a Server Component:
+```tsx
+import { trpc } from "@/trpc/server";
+
+export default async function ProjectPage({ params }) {
+  // Direct call — no HTTP!
+  const project = await trpc.project.getById.query({ id: params.id });
+  return <ProjectView project={project} />;
+}
+```
+
+**`createTRPCOptionsProxy` returns an object** where each router path has `.query()` and `.mutation()` methods. Unlike the client, these call resolvers **directly** (in-process), no HTTP.
+
+### The `"server-only"` directive
+
+```ts
+import "server-only";
+```
+
+If any Client Component imports from this file, **the build fails**. Enforces Server Component-only usage.
+
+### `cache()` on `getQueryClient`
+
+```ts
+export const getQueryClient = cache(makeQueryClient);
+```
+
+React Components can render multiple times (suspense, streaming). `cache()` ensures `getQueryClient()` returns the **same** instance per render cycle — critical for SSR dehydration.
+
+---
+
+## Unit 15 — Dehydration and Hydration Pipeline
+
+### The problem: double-fetching in SSR
+
+Without dehydration:
+1. **Server** renders `<ProjectPage>` → fetches project data → sends HTML
+2. **Client** receives HTML → hydrates React → `useQuery` fires → **refetches same data**
+
+Result: double network request, loading spinner on a page that already has data.
+
+### The solution: dehydration → hydration
+
+**Dehydration** (server-side):
+```ts
+// During Server Component rendering:
+await trpc.project.getById.prefetchQuery({ input: { id: "123" } });
+// ^ stores data in server QueryClient
+
+// Then dehydrate:
+const dehydratedState = dehydrate(getQueryClient());
+// ^ converts cache to JSON-safe
+```
+
+**Hydration** (client-side):
+```tsx
+// In the HTML, a <script> tag contains dehydratedState
+// React's hydration picks it up
+
+// TRPCReactProvider hydrates the client QueryClient:
+<QueryClientProvider client={queryClient}>
+  <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+    {children}
+  </TRPCProvider>
+</QueryClientProvider>
+```
+
+### How superjson fits in
+
+From `src/trpc/query-client.ts`:
+```ts
+dehydrate: {
+  serializeData: superjson.serialize,     // JS → JSON-safe
+},
+hydrate: {
+  deserializeData: superjson.deserialize, // JSON-safe → JS
+},
+```
+
+### The complete pipeline
+
+```
+Server Component:
+trpc.project.getById.query({ id: "123" })
+  ↓
+Procedure runs → returns { project: { createdAt: Date, ... } }
+  ↓
+QueryClient stores: { data: { createdAt: Date }, ... }
+  ↓
+dehydrate(queryClient)
+  ↓
+superjson.serialize(result) → { json: {...}, superjson: {...} }
+  ↓
+Embedded in HTML as JSON
+
+Client receives HTML:
+  ↓
+superjson.deserialize → { createdAt: Date, ... }
+  ↓
+Client QueryClient cache populated
+  ↓
+useQuery reads cached data → NO REFETCH
+```
+
+### `shouldDehydrateQuery`
+
+```ts
+shouldDehydrateQuery: (query) =>
+  defaultShouldDehydrateQuery(query) || query.state.status === 'pending',
+```
+
+Decides which queries get serialized to the client:
+- **Default:** fetched queries (success state) are dehydrated
+- **Our addition:** pending queries are also dehydrated
+
+**Why we dehydrate pending queries:** If a query is still loading on the server, the client should pick up the in-flight request rather than starting a new one.
+
+---
+
+## Unit 16 — Full End-to-End Architecture Trace
+
+### The complete flow: `project.build({ projectId, prompt })`
+
+```
+1. BROWSER — User clicks button
+   src/app/page.tsx:
+   invoke.mutate({ projectId: "proj_abc", prompt: "Build a landing page" })
+
+2. TANSTACK QUERY — mutation management
+   useMutation → mutationFn from trpc.project.build.mutationOptions()
+   → manages isPending, isSuccess, isError states
+
+3. tRPC CLIENT — httpBatchLink
+   → batches into JSON: [{ "id": 1, "method": "project.build", "params": {...} }]
+   → POST /api/trpc (via fetch)
+
+4. HTTP SERVER — Next.js Route Handler
+   src/app/api/trpc/[trpc]/route.ts:
+   fetchRequestHandler({ endpoint, req, router, createContext })
+
+5. Context creation
+   fetchRequestHandler calls createTRPCContext()
+   → cache() ensures one ctx per request
+   → returns { userId: 'user_123' }
+
+6. Procedure resolution
+   fetchRequestHandler reads method: "project.build"
+   → splits into path: ["project", "build"]
+   → walks appRouter.project.build
+
+7. Input validation (Zod)
+   z.object({ projectId: z.string().min(1), prompt: z.string().min(1) })
+   → validates: "proj_abc" ✅, "Build..." ✅
+   → input = { projectId: "proj_abc", prompt: "Build a landing page" }
+
+8. Handler execution
+   src/trpc/routers/project.ts:
+   async ({ input }) => {
+     await inngest.send({
+       name: BUILD_PROJECT_EVENT,     // "vibe/project.build.requested"
+       data: {
+         projectId: "proj_abc",
+         prompt: "Build a landing page"
+       }
+     });
+     return { success: true };
+   }
+
+9. Serialization (SuperJSON)
+   { success: true } → JSON string → HTTP response
+
+10. Browser receives response
+   → httpBatchLink deserializes (SuperJSON)
+   → { success: true }
+
+11. TanStack Query resolves
+   → invoke.isSuccess = true
+   → onSuccess callback fires → toast.success("...")
+
+✅ DONE — synchronous part complete
+
+─── ASYNCHRONOUS PART (separate process) ───
+
+12. INNGEST DEV SERVER receives event
+   → matches triggers: { event: "vibe/project.build.requested" }
+   → starts build-project function
+
+13. INNGEST FUNCTION executes
+   src/inngest/functions/build-project.ts:
+   async ({ event, step }) => {
+     const { projectId, prompt } = event.data;
+     
+     const result = await step.run("run-coding-agent", async () => {
+       const sandbox = await createSandboxService();
+       const agent = await createCodingAgent(sandbox);
+       const response = await agent.generate({ prompt });
+       const previewUrl = sandbox.getPreviewUrl(3000);
+       return { projectId, sandboxId: sandbox.sandboxId, previewUrl, text: response.text };
+     });
+     
+     console.log(`[build-project] Preview: ${result.previewUrl}`);
+     return result;
+   }
+
+14. E2B SANDBOX — agent execution
+   src/sandbox/e2b/sandbox-service.ts:
+   - WORKSPACE_ROOT = "/home/user"
+   - createSandboxService() → E2B sandbox boots (Next.js template)
+   - createCodingAgent(sandbox) → AI agent initialized with tools
+   - agent.generate({ prompt }) → LLM writes code
+     → write_file resolves to /home/user/app/page.tsx
+     → run_command runs in /home/user
+     → 30 steps max
+
+15. INNGEST — result logged
+   → Preview URL appears in logs
+```
+
+### The boundaries
+
+```
+CLIENT WORLD (browser)
+  ↓ tRPC boundary (HTTP) ↓
+SERVER WORLD (Next.js server)
+  ↓ Inngest boundary (event queue) ↓
+SANDBOX WORLD (E2B — separate machine)
+  ↓ AI agent boundary (LLM + tools) ↓
+CODE GENERATION + PREVIEW
+```
+
+**tRPC's responsibility ends** when `inngest.send()` returns. From that point, Inngest owns the lifecycle.
+
+**Inngest's responsibility:** async execution, retries, step checkpointing, logging.
+
+### The full architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│ CLIENT (Browser)                                    │
+│   useTRPC() → useMutation                           │
+│   httpBatchLink → HTTP POST                         │
+└─────────────────────────────────────────────────────┘
+  ↓ (network)
+┌─────────────────────────────────────────────────────┐
+│ tRPC HTTP ADAPTER (server)                          │
+│   fetchRequestHandler                               │
+│   → Zod validation                                  │
+│   → appRouter.project.build                         │
+└─────────────────────────────────────────────────────┘
+  ↓ (direct function call)
+┌─────────────────────────────────────────────────────┐
+│ BUSINESS LOGIC (procedure handler)                  │
+│   inngest.send({ name, data })                      │
+└─────────────────────────────────────────────────────┘
+  ↓ (event queue — async, decoupled)
+┌─────────────────────────────────────────────────────┐
+│ INNGEST FUNCTION                                    │
+│   createSandboxService() → E2B                      │
+│   createCodingAgent() → AI agent                    │
+│   agent.generate() → LLM writes code                │
+│   sandbox.getPreviewUrl(3000)                       │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## Summary: Key Distinctions
+
+| Concept | Definition | In Our Codebase |
+|---------|-----------|-----------------|
+| **tRPC Context** | Per-request dependency bag | `createTRPCContext` returns `{ userId: 'user_123' }` |
+| **Dependency Injection** | Procedures receive `ctx`, don't create dependencies | `{ input, ctx }` handler signature |
+| **Query vs Mutation** | Query = read/cache, Mutation = write/fire-and-forget | `project.build` is a mutation |
+| **SuperJSON** | Type-preserving serializer | Configured as `transformer` in `init.ts` + `client.tsx` |
+| **fetchRequestHandler** | HTTP↔RPC translator | `src/app/api/trpc/[trpc]/route.ts` (13 lines) |
+| **httpBatchLink** | HTTP client link supporting batching | In `createTRPCClient` config (`client.tsx`) |
+| **QueryClient** | Cache + state manager | Configured in `query-client.ts`, used in `client.tsx` + `server.tsx` |
+| **createTRPCOptionsProxy** | Server-side tRPC client | `src/trpc/server.tsx` |
+
+---
+
+*Last updated: Complete curriculum (Units 1–16)*
+*Status: Complete*
+
+
+
