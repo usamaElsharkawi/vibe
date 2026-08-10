@@ -1001,3 +1001,539 @@ Continue with **Unit 4 — Why TypeScript types vanish at runtime** (the deeper 
 
 *Last updated: Units 1–3 complete*
 *Status: In progress*
+
+## Unit 4 — The Fluent Builder Pattern (Standalone Deep Dive)
+
+### Status: ✅ Complete
+
+### Background: Why we study the Builder pattern separately
+
+Before diving into how tRPC uses builders, we isolate the pattern itself. tRPC's `.input().mutation()` is a textbook example of the **immutable fluent builder**. Understanding the pattern in isolation makes tRPC's internal mechanics obvious.
+
+### 1. The problem
+
+You need to construct a complex object with many optional parts. The object requires:
+- Some mandatory components
+- Some optional components
+- Validation of the combination of components
+- A final "build" step that produces the actual object
+
+**Classic example:** Building a pizza.
+- **Required:** crust type
+- **Optional:** toppings (any number), cheese type, sauce type, cooking method
+- **Constraint:** some toppings don't go with certain crusts (e.g., no BBQ sauce on thin crust)
+- **Result:** a finished pizza object
+
+#### Why can't you just use a constructor?
+
+```ts
+// Bad approach — too many parameters
+new Pizza("thin", "mozzarella", "tomato", ["pepperoni", "mushrooms"], "wood-fired")
+// What if you want default cheese but custom toppings?
+// What if you want no sauce?
+// The parameter list grows exponentially and is unreadable.
+```
+
+#### Why can't you use setters?
+
+```ts
+const pizza = new Pizza();
+pizza.setCrust("thin");
+pizza.setSauce("tomato");
+// ... but when is the pizza "ready"?
+// It's in an invalid state until all setters are called
+```
+
+### 2. Human explanation
+
+Think of the Builder pattern like a **form with progressive disclosure**.
+
+You start with a blank form. Each step reveals the next question:
+
+1. "What crust do you want?" → you answer → the form saves that answer
+2. "What sauce?" → you answer → saved
+3. "Add toppings?" → you can add multiple → saved
+4. **Final step:** "Confirm" → produces the completed pizza
+
+**The key properties:**
+
+1. **Step-by-step** — you build incrementally, not all at once
+2. **Validation at build time** — the pizza isn't considered complete until you call `build()`
+3. **Immutability (in the functional variant)** — each step returns a new partially-built object
+4. **Fluent interface** — steps chain naturally: `builder.crust().sauce().topping().build()`
+
+### 3. The two main variants
+
+#### Variant A: Mutable Builder (classic)
+
+```ts
+class PizzaBuilder {
+  private crust: string = "";
+  private sauce: string = "tomato";  // default
+  private toppings: string[] = [];
+
+  setCrust(crust: string): this {
+    this.crust = crust;
+    return this;         // ← returns itself for chaining
+  }
+
+  addSauce(sauce: string): this {
+    this.sauce = sauce;
+    return this;
+  }
+
+  addTopping(topping: string): this {
+    this.toppings.push(topping);
+    return this;
+  }
+
+  build(): Pizza {
+    if (!this.crust) throw new Error("Crust is required");
+    return new Pizza(this.crust, this.sauce, this.toppings);
+  }
+}
+
+// Usage:
+const pizza = new PizzaBuilder()
+  .setCrust("thin")
+  .addTopping("pepperoni")
+  .addTopping("mushrooms")
+  .build();
+```
+
+**Key:** `setCrust()` returns `this` — the same object, modified. The builder **mutates itself**.
+
+#### Variant B: Immutable Builder (functional)
+
+```ts
+interface PizzaConfig {
+  crust: string | null;
+  sauce: string;
+  toppings: string[];
+}
+
+class PizzaBuilder {
+  constructor(private config: PizzaConfig) {}
+
+  setCrust(crust: string): PizzaBuilder {
+    return new PizzaBuilder({ ...this.config, crust });
+  }
+
+  addSauce(sauce: string): PizzaBuilder {
+    return new PizzaBuilder({ ...this.config, sauce });
+  }
+
+  addTopping(topping: string): PizzaBuilder {
+    return new PizzaBuilder({ 
+      ...this.config, 
+      toppings: [...this.config.toppings, topping] 
+    });
+  }
+
+  build(): Pizza {
+    if (!this.config.crust) throw new Error("Crust required");
+    return new Pizza(this.config);
+  }
+}
+```
+
+**Key:** Each method returns a **new instance**. The original builder is unchanged.
+
+### 4. What makes it a "fluent interface"
+
+The fluent interface is the **chaining** — calling methods in sequence without assigning to intermediate variables:
+
+```ts
+// Fluent (chainable):
+const pizza = builder
+  .setCrust("thin")
+  .addSauce("pesto")
+  .addTopping("pepperoni")
+  .build();
+
+// Non-fluent (verbose):
+const b1 = builder.setCrust("thin");
+const b2 = b1.addSauce("pesto");
+const b3 = b2.addTopping("pepperoni");
+const pizza = b3.build();
+```
+
+**The rule for fluent interface:** each method returns `this` (mutable) or a new instance of the same type (immutable), so you can call the next method directly.
+
+### 5. The Sealed Object Pattern
+
+The builder pattern also often includes the idea of **state transitions**:
+
+```
+BaseConfig → ConfigWithInput → ConfigWithResolver (sealed)
+```
+
+Each stage allows different operations:
+- `BaseProcedure` can `.input()`, `.query()`, `.mutation()`
+- `ConfigWithInput` can `.query()`, `.mutation()` (but not `.input()`)
+- `ConfigWithResolver` is sealed — no more methods available
+
+This is **type-level state machine** — the TypeScript types enforce the sequence of operations.
+
+```ts
+type BaseProcedure = {
+  input: (schema: ZodSchema) => ProcedureWithInput;
+  query: (handler: QueryHandler) => SealedProcedure;
+  mutation: (handler: MutationHandler) => SealedProcedure;
+};
+
+type ProcedureWithInput = {
+  // input() is gone!
+  query: (handler: QueryHandler) => SealedProcedure;
+  mutation: (handler: MutationHandler) => SealedProcedure;
+};
+
+type SealedProcedure = {
+  // All builder methods are gone
+  // Only the resolver + metadata are accessible
+  _def: { /* ... */ };
+};
+```
+
+### 6. Real-world examples beyond tRPC
+
+#### Express Route Builder
+```ts
+app.get("/users/:id")
+  .param("id", validateUserId)
+  .middleware(authMiddleware)
+  .handler((req, res) => { /* ... */ });
+```
+
+#### Zod Schema Builder
+```ts
+const schema = z.object({
+  name: z.string().min(1),
+  age: z.number().int().positive(),
+});
+```
+Each call returns a new refined schema.
+
+#### React Query Builder
+```ts
+const userQuery = trpc.user.getById
+  .input(z.object({ id: z.string() }))
+  .queryOptions((id) => ({
+    // query config
+  }));
+```
+
+#### HTTP Client Builders
+```ts
+const req = fetch("/api")
+  .method("POST")
+  .body(JSON.stringify(data))
+  .headers({ "Content-Type": "application/json" })
+  .send();
+```
+
+### 7. Mental Model
+
+> **The Builder pattern is a step-by-step configurator that uses immutable state transitions. Each step returns a new, more-constrained object. The final step "seals" the configuration into an executable artifact.**
+
+Key properties:
+1. **Immutable** — each step returns a new instance, doesn't mutate the original
+2. **Fluent** — methods chain naturally (return `this` or equivalent)
+3. **Type-safe** — TypeScript enforces which operations are valid at each stage
+4. **Validated at completion** — the `build()` step checks all constraints
+
+### 8. Common Confusion
+
+**"Is the Builder pattern the same as a Factory?"**
+
+- **Factory** creates objects. You use it once: `new CarFactory().create()`.
+- **Builder** incrementally configures, then produces. You use it step-by-step: `new PizzaBuilder().crust().sauce().build()`.
+
+**"Why not just use an options object?"**
+
+```ts
+new Pizza({ crust: "thin", sauce: "tomato", toppings: ["pepperoni"] });
+```
+
+Because:
+1. You lose validation at each step (you can't enforce "crust before toppings")
+2. You can't return different types at different stages (the sealed pattern)
+3. Complex validation chains are hard with flat objects
+
+**"Why immutable instead of mutable?"**
+
+- **Immutability** allows reusing the base builder for multiple configurations
+- **Mutable** is simpler but harder to reason about (side effects
+
+**tRPC uses the immutable approach** — each `.input()`, `.mutation()`, `.query()` returns a new procedure definition.
+
+### 9. Tiny exercise
+
+Consider this builder interface:
+
+```ts
+interface ButtonConfig {
+  text: string;
+  variant: "default" | "destructive" | "outline";
+  disabled: boolean;
+}
+
+class ButtonBuilder {
+  constructor(private config: Partial<ButtonConfig>) {}
+
+  setText(text: string): ButtonBuilder {
+    return new ButtonBuilder({ ...this.config, text });
+  }
+
+  setVariant(variant: "default" | "destructive" | "outline"): ButtonBuilder {
+    return new ButtonBuilder({ ...this.config, variant });
+  }
+
+  setDisabled(disabled: boolean): ButtonBuilder {
+    return new ButtonBuilder({ ...this.config, disabled });
+  }
+
+  build(): ButtonConfig {
+    if (!this.config.text) throw new Error("Text is required");
+    return {
+      text: this.config.text,
+      variant: this.config.variant ?? "default",
+      disabled: this.config.disabled ?? false,
+    };
+  }
+}
+```
+
+**Question:**
+```ts
+const base = new ButtonBuilder({});
+const primary = base.setText("Submit");
+const destructive = base.setText("Delete");
+
+const btn1 = primary.build();
+const btn2 = destructive.build();
+```
+
+1. What is `btn1`? What is `btn2`?
+2. After creating `primary` and `destructive`, what is the value of `base.config.text`?
+3. Is it possible for `primary` and `destructive` to have different variants but the same text? Show how.
+
+### 10. Understanding Check
+
+1. **"Each builder method returns a new instance"** — In the immutable variant, what happens to the original builder object when you call `.setText("Hello")` on it? Is it modified, or is it left untouched?
+
+2. **Fluent chaining** — Why can you write `builder.crust("thin").sauce("pesto").build()` without intermediate variables? What does each `.method()` need to return for this to work?
+
+3. **Validation timing** — Why is the `.build()` step separate from the configuration steps (`.crust()`, `.sauce()`, etc.)? What would go wrong if validation happened at each step instead?
+
+4. **Type-level state machine** — If `BaseProcedure` has methods `.input()` and `.query()`, and `ProcedureWithInput` has only `.query()` (no `.input()`), what TypeScript feature makes this possible? (Think about method signatures on different interfaces/types.)
+
+---
+
+## Unit 5 — tRPC's Fluent Builder (Connecting the Pattern)
+
+### Status: ✅ Complete
+
+### How tRPC's `baseProcedure.input().mutation()` maps to the Builder pattern
+
+Now that you understand the Builder pattern in isolation, let's map it directly to tRPC.
+
+#### The immutable builder
+
+```ts
+// src/trpc/init.ts
+const t = initTRPC.create({ transformer: superjson });
+export const baseProcedure = t.procedure;  // ← THE BASE BUILDER (pristine)
+```
+
+`baseProcedure` is the equivalent of `new PizzaBuilder({})` — a fresh, unmodified starting point.
+
+#### Step 1: `.input()` — adding constraints
+
+```ts
+// project.ts
+const withInput = baseProcedure
+  .input(z.object({ projectId: z.string().min(1) }));
+
+// This returns a NEW ProcedureBuilder — baseProcedure is unchanged
+// Like: const step1 = new PizzaBuilder({...baseConfig, crust: "thin"}) // new instance
+```
+
+#### Step 2: `.mutation()` — sealing into an executable procedure
+
+```ts
+const sealed = withInput
+  .mutation(async ({ input, ctx }) => {
+    await inngest.send({ name: BUILD_PROJECT_EVENT, data: { projectId: input.projectId } });
+    return { success: true };
+  });
+
+// This returns a NEW sealed procedure — withInput is unchanged
+```
+
+#### The full chain in our code
+
+```ts
+// src/trpc/routers/project.ts
+export const projectRouter = createTRPCRouter({
+  build: baseProcedure                    // ← BaseProcedure (pristine)
+    .input(z.object({                     // ← Step 1: add input constraint
+      projectId: z.string().min(1),
+      prompt: z.string().min(1).max(10_000),
+    }))
+    .mutation(async ({ input }) => {     // ← Step 2: seal + add handler
+      await inngest.send({
+        name: BUILD_PROJECT_EVENT,
+        data: { projectId: input.projectId }
+      });
+      return { success: true };
+    }),
+});
+```
+
+#### What each stage returns
+
+| Stage | Expression | What's returned | TypeScript type |
+|---|---|---|---|
+| Base | `baseProcedure` | ProcedureBuilder | Builder with input/query/mutation methods |
+| After `.input()` | `baseProcedure.input(schema)` | ProcedureBuilder | Builder with query/mutation methods only |
+| After `.mutation()` | `.input(schema).mutation(handler)` | SealedProcedure | Sealed — no more builder methods |
+
+#### Why immutability matters here
+
+```ts
+// We can reuse baseProcedure for multiple procedures:
+const hello = baseProcedure
+  .input(z.object({ text: z.string() }))
+  .query((opts) => ({ greeting: `hello ${opts.input.text}` }));
+
+const build = baseProcedure
+  .input(z.object({ projectId: z.string() }))
+  .mutation(async ({ input }) => { /* ... */ });
+
+// baseProcedure is still: { input(), query(), mutation() }
+// hello and build are independent, sealed procedures
+```
+
+#### Connection to `createTRPCRouter`
+
+`createTRPCRouter({ build: sealedProcedure, ... })` receives the **sealed** procedures (the result of `.input().mutation()`). It doesn't call `.build()` — tRPC calls it implicitly when the procedure is **registered** in the router.
+
+#### Key difference from PizzaBuilder
+
+In our PizzaBuilder exercise, you had to call `.build()` to produce the pizza. In tRPC:
+- `baseProcedure.input(schema).mutation(handler)` **IS** the final product
+- The `.mutation()` call is tRPC's equivalent of `.build()` — it seals the procedure
+- There's no separate `.build()` step
+
+This is a common pattern in libraries — the last meaningful method call serves dual purpose as the builder AND the sealer.
+
+### Mental model
+
+> **tRPC's `baseProcedure` is a pristine builder. `.input()` adds a constraint (returns new builder). `.mutation()` / `.query()` seals it (returns a sealed procedure with a handler). Each step is immutable — `baseProcedure` is never modified.**
+
+This is why you can reuse `baseProcedure` for `hello`, `generateApp`, and `build` — they all branch from the same pristine root.
+
+---
+
+## Unit 6 — Context and Dependency Injection
+
+(See previous conversation — Units 6a and 6b)
+
+### Status: ✅ Complete
+
+---
+
+## Sequence Diagram: Complete Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+
+    participant Comp as Client Component
+    participant TQ as TanStack Query
+    participant TC as tRPC Client
+    participant TS as tRPC Server (API Route)
+    participant SH as Server Handler
+    participant DB as Database
+
+    rect rgb(25,25,25)
+    Note over Comp,DB: Flow 1 — Client-side query/mutation
+    Comp->>TQ: useQuery / useMutation
+    Note right of Comp: src/app/page.tsx
+    TQ->>TC: invoke procedure
+    TC->>TS: HTTP POST /api/trpc --- network ---
+    Note right of TS: src/app/api/trpc/[trpc]/route.ts
+    TS->>SH: fetchRequestHandler → appRouter → procedure
+    Note right of SH: src/trpc/routers/_app.ts + project.ts
+    SH->>DB: prisma / inngest.send
+    DB-->>SH: result
+    SH-->>TS: { success: true }
+    TS-->>TC: JSON response
+    TC-->>TQ: data
+    TQ-->>Comp: cache + re-render
+    end
+
+    participant RSC as React Server Component
+    participant QC as QueryClient (server)
+    participant TSC as tRPC Server Caller
+    participant SH2 as Server Handler
+    participant DB2 as Database
+    participant CL as Client Layer (hydrated)
+
+    rect rgb(20,35,20)
+    Note over RSC,CL: Flow 2 — Server-side prefetch + hydration
+    Note right of RSC: Server Component (no "use client")
+    RSC->>QC: getQueryClient() [server.tsx]
+    Note right of QC: src/trpc/server.tsx + query-client.ts
+    RSC->>TSC: prefetchQuery(trpc.x.queryOptions())
+    TSC->>SH2: call resolver directly (no network)
+    SH2->>DB2: query
+    DB2-->>SH2: rows
+    SH2-->>TSC: result
+    TSC-->>QC: populate cache
+    RSC->>RSC: dehydrate(QC) [superjson]
+    RSC->>CL: <HydrationBoundary state={dehydratedState}>
+    CL->>QC: hydrate() on mount
+    Note right of CL: useQuery reads from cache, no refetch
+    end
+```
+
+### What the diagram shows
+
+**Flow 1 (dark box) — Client-side execution:**
+- Client Component calls `useQuery` or `useMutation`
+- TanStack Query manages the request lifecycle
+- tRPC Client sends HTTP POST to `/api/trpc`
+- Route Handler receives the request
+- `fetchRequestHandler` routes to the appropriate procedure
+- Procedure executes (database queries, Inngest events, etc.)
+- Response travels back through the layers
+- TanStack Query caches the result and triggers re-render
+
+**Flow 2 (green box) — Server-side prefetch + hydration:**
+- React Server Component creates a server-side QueryClient
+- Calls tRPC procedure directly (no HTTP)
+- Procedure executes and result is cached
+- QueryClient is dehydrated (serialized with superjson)
+- Dehydrated state is passed to client via `<HydrationBoundary>`
+- Client hydrates its own QueryClient with the pre-fetched data
+- Client-side `useQuery` reads from cache instantly — no refetch needed
+
+### Key insights
+
+1. **Dual invocation paths:** The same procedure can be invoked via HTTP (client-side) or directly (server-side).
+2. **TanStack Query on both sides:** Client-side caching and server-side prefetching.
+3. **Dehydration/hydration handoff:** Server serializes QueryClient → JSON → Client deserializes without refetching.
+4. **SuperJSON is essential:** Preserves Dates, Maps, Sets across serialization boundaries.
+
+---
+
+## Next Steps
+
+Continue with **Unit 7 — Context in procedure handlers and authentication** (the deeper application of dependency injection).
+
+---
+
+*Last updated: Units 1–6 complete (including builder pattern deep dive)*
+*Status: In progress*
