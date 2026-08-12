@@ -6,9 +6,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Home() {
-  const [value, setValue] = useState("");
+  const [prompt, setPrompt] = useState("");
   const trpc = useTRPC();
-  const invoke = useMutation(trpc.generateApp.mutationOptions({
+  const invoke = useMutation(trpc.project.build.mutationOptions({
     onSuccess: () => {
       toast.success("Sandbox job triggered! Check Inngest logs for the preview URL.");
     },
@@ -29,14 +29,14 @@ export default function Home() {
           <label htmlFor="value-input" className="text-sm font-medium">Value (passed to the job)</label>
           <input
             id="value-input"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
             className="border border-input rounded-md px-3 py-2 text-sm"
             placeholder="Optional value..."
           />
         </div>
         <Button
-          onClick={() => invoke.mutate({ value: value || "start-sandbox" })}
+          onClick={() => invoke.mutate({ projectId: crypto.randomUUID(), prompt })}
           disabled={invoke.isPending}
         >
           {invoke.isPending ? "Starting Sandbox..." : "Start Sandbox"}

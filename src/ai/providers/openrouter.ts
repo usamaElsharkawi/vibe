@@ -3,7 +3,7 @@ import type { Provider } from "../router/provider-registry";
 import { PROVIDERS } from "../constants/providers";
 import { OPENROUTER_FALLBACK_MODELS } from "../constants/models";
 
-export const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/v1";
+export const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_BASE_URL =
   process.env.OPENROUTER_BASE_URL?.trim() || OPENROUTER_DEFAULT_BASE_URL;

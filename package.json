@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:router": "tsx scripts/test-model-router.ts"
+    "typecheck": "tsc --noEmit",
+    "test:router": "tsx scripts/test-model-router.ts",
+    "verify:router": "tsx scripts/verify-model-router.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.24",

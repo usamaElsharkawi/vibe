@@ -1,18 +1,20 @@
 import { z } from "zod";
+
 import { baseProcedure, createTRPCRouter } from "../init";
+import { projectRouter } from "./project";
 import { inngest } from "@/inngest/client";
 
-
 export const appRouter = createTRPCRouter({
+  project: projectRouter,
+
   generateApp: baseProcedure
-  .input(z.object({ value: z.string() }))
-  .mutation(async ({ input }) => {
-    await inngest.send({
-      name: "app/task.created",
-      data: { value: input.value }
-    });
-  }),
-  
+    .input(z.object({ value: z.string() }))
+    .mutation(async ({ input }) => {
+      await inngest.send({
+        name: "app/task.created",
+        data: { value: input.value },
+      });
+    }),
 
   hello: baseProcedure
     .input(

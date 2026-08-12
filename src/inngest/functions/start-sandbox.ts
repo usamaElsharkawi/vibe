@@ -1,41 +1,49 @@
-import { inngest } from "./client";
-import { Sandbox } from "e2b";
+import { inngest } from "../client";
+
+import { createSandboxService } from "@/sandbox/e2b/sandbox-service";
 
 export const startSandbox = inngest.createFunction(
   {
     id: "start-sandbox",
+
     triggers: [{ event: "app/task.created" }],
   },
-  async ({ event, step }) => {
+
+    async ({ step }) => {
     const result = await step.run("create-sandbox", async () => {
-      // Create sandbox from the pre-built template
-      // The template's startCmd (sandbox-templates/nextjs/template.ts)
-      // automatically runs 'npx next dev --turbopack' and waits for port 3000
-      const sandbox = await Sandbox.create("vibe-nextjs-dev");
+      const sandbox = await createSandboxService();
 
-      // Get the public preview URL for port 3000
-      const host = sandbox.getHost(3000);
-      const previewUrl = `https://${host}`;
+      const previewUrl = sandbox.getPreviewUrl(3000);
 
-      // Log the sandbox details clearly for manual copying
       console.log("");
+
       console.log("========== SANDBOX STARTED ==========");
+
       console.log("");
+
       console.log("Sandbox ID:");
+
       console.log(sandbox.sandboxId);
+
       console.log("");
+
       console.log("Preview URL:");
+
       console.log(previewUrl);
+
       console.log("");
+
       console.log("=====================================");
+
       console.log("");
 
       return {
         sandboxId: sandbox.sandboxId,
+
         previewUrl,
       };
     });
 
     return result;
-  }
+  },
 );
