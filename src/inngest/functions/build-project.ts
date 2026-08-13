@@ -1,8 +1,13 @@
 import { inngest } from "../client";
 
-import { createSandboxService } from "@/sandbox/e2b/sandbox-service";
+import {
+  connectSandboxService,
+  createSandboxService,
+} from "@/sandbox/e2b/sandbox-service";
 
 import { createCodingAgent } from "@/ai/agent/coding-agent";
+import { MessageRole, MessageType } from "@/generated/prisma/enums";
+import prisma from "@/lib/db";
 
 export const buildProject = inngest.createFunction(
   {
@@ -16,32 +21,79 @@ export const buildProject = inngest.createFunction(
   },
 
   async ({ event, step }) => {
-    const { projectId, prompt } = event.data;
+    const { prompt } = event.data;
+
+    const sandboxId = await step.run("create-sandbox", async () => {
+      const sandbox = await createSandboxService();
+      return sandbox.sandboxId;
+    });
 
     const result = await step.run("run-coding-agent", async () => {
-      const sandbox = await createSandboxService();
+      const sandbox = await connectSandboxService(sandboxId);
 
-      const agent = await createCodingAgent(sandbox);
+      const { agent, context } = await createCodingAgent(sandbox);
 
       const response = await agent.generate({
         prompt,
       });
 
-      const previewUrl = sandbox.getPreviewUrl(3000);
+      const summaryMatch = response.text.match(
+        /<task_summary>([\s\S]*?)<\/task_summary>/,
+      );
+      const summary = summaryMatch ? summaryMatch[1].trim() : "";
 
       return {
-        projectId,
-
         sandboxId: sandbox.sandboxId,
-
-        previewUrl,
-
-        text: response.text,
+        summary,
+        files: context.files,
       };
     });
 
-    console.log(`[build-project] Preview: ${result.previewUrl}`);
+    const sandBoxUrl = await step.run("get-sandbox-url", async () => {
+      const sandbox = await connectSandboxService(sandboxId);
+      return sandbox.getPreviewUrl(3000);
+    });
 
-    return result;
+    const isError =
+      !result.summary || Object.keys(result.files).length === 0;
+
+    const savedMessage = await step.run("save-result", async () => {
+      if (isError) {
+        return prisma.message.create({
+          data: {
+            content: "Something went wrong. Please try again.",
+            role: MessageRole.ASSISTANT,
+            type: MessageType.ERROR,
+          },
+        });
+      }
+
+      return prisma.message.create({
+        data: {
+          content: result.summary,
+          role: MessageRole.ASSISTANT,
+          type: MessageType.RESULT,
+          fragment: {
+            create: {
+              sanboxUrl: sandBoxUrl,
+              title: "Fragment",
+              files: result.files,
+            },
+          },
+        },
+        include: {
+          fragment: true,
+        },
+      });
+    });
+
+    console.log(`[build-project] Preview: ${sandBoxUrl}`);
+
+    return {
+      ...result,
+      sandBoxUrl,
+      messageId: savedMessage.id,
+      isError,
+    };
   },
 );

@@ -5,18 +5,24 @@ import { CODING_AGENT_INSTRUCTIONS } from "@/ai/prompts/coding-agent-prompt";
 import { ENVIRONMENTS } from "@/ai/constants/environment";
 import { ModelRouter } from "@/ai";
 import type { E2BSandboxService } from "@/sandbox/e2b/sandbox-service";
+import { CodingAgentContext } from "../tools/types";
 
 const MAX_AGENT_STEPS = 30;
 
 export async function createCodingAgent(sandbox: E2BSandboxService) {
-  const tools = createCodingTools(sandbox);
+  const context: CodingAgentContext = {
+    sandbox,
+    files: {},
+  };
+
+  const tools = createCodingTools(sandbox,context);
 
   const modelRouter = new ModelRouter();
   const model = await modelRouter.getModel({
     environment: ENVIRONMENTS.DEVELOPMENT,
   });
 
-  return new ToolLoopAgent({
+  const agent = new ToolLoopAgent({
     model,
 
     instructions: CODING_AGENT_INSTRUCTIONS,
@@ -45,4 +51,9 @@ export async function createCodingAgent(sandbox: E2BSandboxService) {
       }
     },
   });
+
+  return {
+    agent,
+    context
+  }
 }

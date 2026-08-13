@@ -21,6 +21,7 @@ export const createWriteFileTool = (context: CodingAgentContext) =>
     execute: async ({ path, content }) => {
       try {
         await context.sandbox.writeFile(path, content);
+        context.files[path] = content
 
         return {
           success: true,

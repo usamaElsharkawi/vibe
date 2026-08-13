@@ -5,7 +5,6 @@ export interface BuildProjectEvent {
   name: typeof BUILD_PROJECT_EVENT;
 
   data: {
-    projectId: string;
     prompt: string;
   };
 }

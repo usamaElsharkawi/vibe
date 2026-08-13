@@ -1,7 +1,7 @@
 import { inngest } from "./client";
 
-import { buildProject, startSandbox } from "./functions";
+import { buildProject } from "./functions";
 
-export const inngestFunctions = [startSandbox, buildProject];
+export const inngestFunctions = [buildProject];
 
 export { inngest };

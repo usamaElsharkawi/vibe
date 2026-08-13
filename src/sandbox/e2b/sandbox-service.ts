@@ -99,3 +99,9 @@ export async function createSandboxService() {
 }
 
 
+
+export async function connectSandboxService(sandboxId:string){
+  const sandbox =  await Sandbox.connect(sandboxId);
+
+  return new E2BSandboxService(sandbox)
+}
