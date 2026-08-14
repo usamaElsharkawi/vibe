@@ -1,18 +1,16 @@
 import { MessageRole, MessageType } from "@/generated/prisma/enums";
+import { generateSlug } from "random-word-slugs";
 import { inngest } from "@/inngest";
 import { BUILD_PROJECT_EVENT } from "@/inngest/events";
 import prisma from "@/lib/db";
 import { baseProcedure, createTRPCRouter } from "@/trpc/init";
 import z from "zod";
 
-export const messageRouter = createTRPCRouter({
+export const projectsRouter = createTRPCRouter({
   getMany: baseProcedure.query(async () => {
-    return prisma.message.findMany({
+    return prisma.project.findMany({
       orderBy: {
         createdAt: "asc",
-      },
-      include: {
-        fragment: true,
       },
     });
   }),
@@ -22,29 +20,34 @@ export const messageRouter = createTRPCRouter({
       z.object({
         value: z.string()
         .min(1, { message: "Value is required" })
-        .max(10000,{message:"Value is too long"}),
-        projectId: z.string().min(1,{message:"projctId is requied"})
+        .max(10000,{message:"Value is too long"})
       }),
     )
     .mutation(async ({ input }) => {
-      const createdMessage = await prisma.message.create({
-        data: {
-          projectId:input.projectId,
-          content: input.value,
-          role: MessageRole.USER,
-          type: MessageType.RESULT,
-        },
-      });
-
+      const createdProject = await prisma.project.create({
+        data:{
+          name:generateSlug(2,{
+            format:"kebab"
+          }),
+          message:{
+            create:{
+              content: input.value,
+              role: MessageRole.USER,
+              type: MessageType.RESULT,
+            }
+          }
+        }
+      })
+    
       await inngest.send({
         name: BUILD_PROJECT_EVENT,
 
         data: {
           prompt: input.value,
-          projectId:input.projectId
+          projectId:createdProject.id
         },
       });
 
-      return createdMessage;
+      return createdProject;
     }),
 });

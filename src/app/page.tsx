@@ -3,10 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Home() {
+ const router = useRouter()
   const [prompt, setPrompt] = useState("");
   const trpc = useTRPC();
 
@@ -23,12 +25,13 @@ export default function Home() {
     },
   });
 
-  const createMessage = useMutation(
-    trpc.messages.create.mutationOptions({
-      onSuccess: () => {
+  const createProject = useMutation(
+    trpc.project.create.mutationOptions({
+      onSuccess: (data) => {
         toast.success("Build started!");
         setPrompt("");
         void messagesQuery.refetch();
+        router.push(`/projects/${data.id}`)
       },
       onError: (error) => {
         toast.error(`Failed to start build: ${error.message}`);
@@ -39,7 +42,7 @@ export default function Home() {
   const handleSubmit = () => {
     const value = prompt.trim();
     if (!value) return;
-    createMessage.mutate({ value });
+    createProject.mutate({ value });
   };
 
   return (
@@ -70,9 +73,9 @@ export default function Home() {
         </div>
         <Button
           onClick={handleSubmit}
-          disabled={createMessage.isPending || !prompt.trim()}
+          disabled={createProject.isPending || !prompt.trim()}
         >
-          {createMessage.isPending ? "Building..." : "Build"}
+          {createProject.isPending ? "Building..." : "Build"}
         </Button>
       </div>
 
