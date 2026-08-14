@@ -5,13 +5,16 @@ export const OPENAI_MODELS = {
 
 // OpenRouter Free Models (as of August 2026)
 // These are real model IDs from https://openrouter.ai/collections/free-models
+// Order = priority: fast, reliable free models first. Some premium free
+// models (e.g. nemotron-3-ultra) are commonly rate-limited on the free tier,
+// so they are kept later in the chain as fallbacks.
 export const OPENROUTER_MODELS = {
-  PRIMARY: "nvidia/nemotron-3-ultra-550b-a55b:free", // Best free model
-  FALLBACK_1: "poolside/laguna-s-2.1:free", // Coding agent model
-  FALLBACK_2: "nvidia/nemotron-3-super-120b-a12b:free", // 120B MoE model
-  FALLBACK_3: "cohere/north-mini-code:free", // Cohere coding model
-  FALLBACK_4: "google/gemma-4-26b-a4b-it:free", // Google Gemma 4
-  FALLBACK_5: "openai/gpt-oss-20b:free", // OpenAI open-source model
+  PRIMARY: "nvidia/nemotron-3-nano-30b-a3b:free", // Fast & reliable
+  FALLBACK_1: "cohere/north-mini-code:free", // Cohere coding model (fast)
+  FALLBACK_2: "poolside/laguna-s-2.1:free", // Coding agent model
+  FALLBACK_3: "google/gemma-4-26b-a4b-it:free", // Google Gemma 4
+  FALLBACK_4: "nvidia/nemotron-3-ultra-550b-a55b:free", // Best (often rate-limited)
+  FALLBACK_5: "nvidia/nemotron-3-super-120b-a12b:free", // 120B MoE (slow)
 } as const;
 
 // Google Gemini Models (valid as of August 2026)

@@ -1,57 +1,148 @@
-"use client"
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { useTRPC } from "@/trpc/client";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Home() {
-  const [value, setValue] = useState("");
+  const [prompt, setPrompt] = useState("");
   const trpc = useTRPC();
-  const invoke = useMutation(trpc.generateApp.mutationOptions({
-    onSuccess: () => {
-      toast.success("Sandbox job triggered! Check Inngest logs for the preview URL.");
+
+  const messagesQuery = useQuery({
+    ...trpc.messages.getMany.queryOptions(),
+    refetchInterval: (query) => {
+      const messages = query.state.data;
+      if (!messages?.length) return 3000;
+
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === "USER") return 3000;
+
+      return false;
     },
-    onError: (error) => {
-      toast.error(`Failed to trigger sandbox: ${error.message}`);
-    },
-  }));
+  });
+
+  const createMessage = useMutation(
+    trpc.messages.create.mutationOptions({
+      onSuccess: () => {
+        toast.success("Build started!");
+        setPrompt("");
+        void messagesQuery.refetch();
+      },
+      onError: (error) => {
+        toast.error(`Failed to start build: ${error.message}`);
+      },
+    }),
+  );
+
+  const handleSubmit = () => {
+    const value = prompt.trim();
+    if (!value) return;
+    createMessage.mutate({ value });
+  };
 
   return (
-    <div className="p-4 max-w-7xl">
-      <h1 className="text-2xl font-bold mb-4">Vibe — Infrastructure Milestone</h1>
-      <p className="text-muted-foreground mb-6">
-        Click the button below to start an E2B sandbox with a Next.js app running inside it.
-        The preview URL will appear in the Inngest logs.
-      </p>
+    <div className="p-4 max-w-7xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold mb-2">Vibe</h1>
+        <p className="text-muted-foreground">
+          Describe what you want to build. The coding agent will run in an E2B
+          sandbox and save the result here when finished.
+        </p>
+      </div>
+
       <div className="flex gap-4 items-end">
-        <div className="flex flex-col gap-2">
-          <label htmlFor="value-input" className="text-sm font-medium">Value (passed to the job)</label>
+        <div className="flex flex-col gap-2 flex-1">
+          <label htmlFor="prompt-input" className="text-sm font-medium">
+            Prompt
+          </label>
           <input
-            id="value-input"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
+            id="prompt-input"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSubmit();
+            }}
             className="border border-input rounded-md px-3 py-2 text-sm"
-            placeholder="Optional value..."
+            placeholder="Build a todo app with drag and drop..."
           />
         </div>
         <Button
-          onClick={() => invoke.mutate({ value: value || "start-sandbox" })}
-          disabled={invoke.isPending}
+          onClick={handleSubmit}
+          disabled={createMessage.isPending || !prompt.trim()}
         >
-          {invoke.isPending ? "Starting Sandbox..." : "Start Sandbox"}
+          {createMessage.isPending ? "Building..." : "Build"}
         </Button>
       </div>
-      {invoke.isSuccess && (
-        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
-          ✅ Sandbox job has been triggered successfully. Check the Inngest logs.
-        </div>
-      )}
-      {invoke.isError && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
-          ❌ Failed to trigger sandbox: {invoke.error.message}
-        </div>
-      )}
+
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Messages</h2>
+
+        {messagesQuery.isLoading && (
+          <p className="text-sm text-muted-foreground">Loading messages...</p>
+        )}
+
+        {messagesQuery.isError && (
+          <p className="text-sm text-red-600">
+            Failed to load messages: {messagesQuery.error.message}
+          </p>
+        )}
+
+        {messagesQuery.data?.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No messages yet. Submit a prompt to get started.
+          </p>
+        )}
+
+        <ul className="space-y-3">
+          {messagesQuery.data?.map((message) => (
+            <li
+              key={message.id}
+              className={`rounded-lg border p-4 ${
+                message.role === "USER"
+                  ? "bg-muted/30"
+                  : message.type === "ERROR"
+                    ? "border-red-200 bg-red-50"
+                    : "bg-background"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {message.role}
+                  {message.type === "ERROR" ? " · Error" : ""}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(message.createdAt).toLocaleString()}
+                </span>
+              </div>
+
+              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+
+              {message.fragment && (
+                <div className="mt-3 pt-3 border-t space-y-2">
+                  <p className="text-sm font-medium">Preview</p>
+                  <a
+                    href={message.fragment.sanboxUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:underline break-all"
+                  >
+                    {message.fragment.sanboxUrl}
+                  </a>
+                  <p className="text-xs text-muted-foreground">
+                    {Object.keys(message.fragment.files as object).length} file
+                    {Object.keys(message.fragment.files as object).length === 1
+                      ? ""
+                      : "s"}{" "}
+                    generated
+                  </p>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

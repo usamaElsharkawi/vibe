@@ -1,11 +1,18 @@
-export const tools = {}
+import type { E2BSandboxService } from "@/sandbox/e2b/sandbox-service";
 
-// Later we'll export:
+import { createReadFileTool } from "./read-file";
+import { createRunCommandTool } from "./run-command";
+import { createWriteFileTool } from "./write-file";
+import { CodingAgentContext } from "./types";
 
-// writeFile
-// readFile
-// runCommand
-// done
-// etc.
+export function createCodingTools(sandbox: E2BSandboxService,context:CodingAgentContext) {
+ 
 
-// The docs encourage passing a tools object to the agent, so having a central export fits naturally.
+  return {
+    read_file: createReadFileTool(context),
+
+    write_file: createWriteFileTool(context),
+
+    run_command: createRunCommandTool(context),
+  };
+}
