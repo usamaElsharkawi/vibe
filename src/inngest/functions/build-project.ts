@@ -21,7 +21,7 @@ export const buildProject = inngest.createFunction(
   },
 
   async ({ event, step }) => {
-    const { prompt } = event.data;
+    const { prompt,projectId } = event.data;
 
     const sandboxId = await step.run("create-sandbox", async () => {
       const sandbox = await createSandboxService();
@@ -61,6 +61,7 @@ export const buildProject = inngest.createFunction(
       if (isError) {
         return prisma.message.create({
           data: {
+            projectId:projectId,
             content: "Something went wrong. Please try again.",
             role: MessageRole.ASSISTANT,
             type: MessageType.ERROR,
@@ -70,6 +71,7 @@ export const buildProject = inngest.createFunction(
 
       return prisma.message.create({
         data: {
+          projectId:projectId,
           content: result.summary,
           role: MessageRole.ASSISTANT,
           type: MessageType.RESULT,
