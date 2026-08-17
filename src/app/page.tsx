@@ -8,30 +8,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Home() {
- const router = useRouter()
+  const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const trpc = useTRPC();
-
-  const messagesQuery = useQuery({
-    ...trpc.messages.getMany.queryOptions(),
-    refetchInterval: (query) => {
-      const messages = query.state.data;
-      if (!messages?.length) return 3000;
-
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage.role === "USER") return 3000;
-
-      return false;
-    },
-  });
 
   const createProject = useMutation(
     trpc.project.create.mutationOptions({
       onSuccess: (data) => {
         toast.success("Build started!");
         setPrompt("");
-        void messagesQuery.refetch();
-        router.push(`/projects/${data.id}`)
+        router.push(`/projects/${data.id}`);
       },
       onError: (error) => {
         toast.error(`Failed to start build: ${error.message}`);
@@ -77,74 +63,6 @@ export default function Home() {
         >
           {createProject.isPending ? "Building..." : "Build"}
         </Button>
-      </div>
-
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Messages</h2>
-
-        {messagesQuery.isLoading && (
-          <p className="text-sm text-muted-foreground">Loading messages...</p>
-        )}
-
-        {messagesQuery.isError && (
-          <p className="text-sm text-red-600">
-            Failed to load messages: {messagesQuery.error.message}
-          </p>
-        )}
-
-        {messagesQuery.data?.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No messages yet. Submit a prompt to get started.
-          </p>
-        )}
-
-        <ul className="space-y-3">
-          {messagesQuery.data?.map((message) => (
-            <li
-              key={message.id}
-              className={`rounded-lg border p-4 ${
-                message.role === "USER"
-                  ? "bg-muted/30"
-                  : message.type === "ERROR"
-                    ? "border-red-200 bg-red-50"
-                    : "bg-background"
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {message.role}
-                  {message.type === "ERROR" ? " · Error" : ""}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(message.createdAt).toLocaleString()}
-                </span>
-              </div>
-
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-
-              {message.fragment && (
-                <div className="mt-3 pt-3 border-t space-y-2">
-                  <p className="text-sm font-medium">Preview</p>
-                  <a
-                    href={message.fragment.sanboxUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:underline break-all"
-                  >
-                    {message.fragment.sanboxUrl}
-                  </a>
-                  <p className="text-xs text-muted-foreground">
-                    {Object.keys(message.fragment.files as object).length} file
-                    {Object.keys(message.fragment.files as object).length === 1
-                      ? ""
-                      : "s"}{" "}
-                    generated
-                  </p>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
       </div>
     </div>
   );
