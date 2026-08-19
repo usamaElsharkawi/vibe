@@ -21,7 +21,7 @@ export const buildProject = inngest.createFunction(
   },
 
   async ({ event, step }) => {
-    const { prompt,projectId } = event.data;
+    const { prompt, projectId } = event.data;
 
     const sandboxId = await step.run("create-sandbox", async () => {
       const sandbox = await createSandboxService();
@@ -49,19 +49,18 @@ export const buildProject = inngest.createFunction(
       };
     });
 
-    const sandBoxUrl = await step.run("get-sandbox-url", async () => {
+    const sandboxUrl = await step.run("get-sandbox-url", async () => {
       const sandbox = await connectSandboxService(sandboxId);
       return sandbox.getPreviewUrl(3000);
     });
 
-    const isError =
-      !result.summary || Object.keys(result.files).length === 0;
+    const isError = !result.summary || Object.keys(result.files).length === 0;
 
     const savedMessage = await step.run("save-result", async () => {
       if (isError) {
         return prisma.message.create({
           data: {
-            projectId:projectId,
+            projectId: projectId,
             content: "Something went wrong. Please try again.",
             role: MessageRole.ASSISTANT,
             type: MessageType.ERROR,
@@ -71,13 +70,13 @@ export const buildProject = inngest.createFunction(
 
       return prisma.message.create({
         data: {
-          projectId:projectId,
+          projectId: projectId,
           content: result.summary,
           role: MessageRole.ASSISTANT,
           type: MessageType.RESULT,
           fragment: {
             create: {
-              sanboxUrl: sandBoxUrl,
+              sandboxUrl,
               title: "Fragment",
               files: result.files,
             },
@@ -89,11 +88,11 @@ export const buildProject = inngest.createFunction(
       });
     });
 
-    console.log(`[build-project] Preview: ${sandBoxUrl}`);
+    console.log(`[build-project] Preview: ${sandboxUrl}`);
 
     return {
       ...result,
-      sandBoxUrl,
+      sandboxUrl,
       messageId: savedMessage.id,
       isError,
     };

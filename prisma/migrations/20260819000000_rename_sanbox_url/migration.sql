@@ -1,0 +1,1 @@
+ALTER TABLE "Fragment" RENAME COLUMN "sanboxUrl" TO "sandboxUrl";
