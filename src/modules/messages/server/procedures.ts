@@ -33,7 +33,7 @@ export const messageRouter = createTRPCRouter({
           .string()
           .min(1, { message: "Value is required" })
           .max(10000, { message: "Value is too long" }),
-        projectId: z.string().min(1, { message: "projctId is requied" }),
+        projectId: z.string().min(1, { message: "projectId is required" }),
       }),
     )
     .mutation(async ({ input }) => {

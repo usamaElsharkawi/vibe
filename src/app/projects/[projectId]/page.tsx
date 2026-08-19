@@ -17,7 +17,7 @@ const Page = async ({ params }: Props) => {
 
   try {
     await queryClient.fetchQuery(
-      trpc.project.getOne.queryOptions({
+      trpc.projects.getOne.queryOptions({
         id: projectId,
       }),
     );
