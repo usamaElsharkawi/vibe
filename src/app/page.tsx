@@ -13,7 +13,7 @@ export default function Home() {
   const trpc = useTRPC();
 
   const createProject = useMutation(
-    trpc.project.create.mutationOptions({
+    trpc.projects.create.mutationOptions({
       onSuccess: (data) => {
         toast.success("Build started!");
         setPrompt("");

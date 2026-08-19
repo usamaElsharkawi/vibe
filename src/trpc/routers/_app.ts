@@ -4,7 +4,7 @@ import { messageRouter } from "@/modules/messages/server/procedures";
 
 export const appRouter = createTRPCRouter({
   messages: messageRouter,
-  project: projectsRouter,
+  projects: projectsRouter,
 });
 
 export type AppRouter = typeof appRouter;
