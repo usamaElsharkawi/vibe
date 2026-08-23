@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import { useEffect, useRef } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useSuspenseQuery } from "@tanstack/react-query";
@@ -19,6 +19,7 @@ export const MessageContainer = ({
   setActiveFragment,
 }: Props) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastAssistantMessageIdRef = useRef<string | null>(null);
   const trpc = useTRPC();
   const { data: messages } = useSuspenseQuery(
     trpc.messages.getMany.queryOptions(
@@ -35,20 +36,24 @@ export const MessageContainer = ({
   const isUserMessage = lastMessage.role === "USER";
 
   //TODO: This causing problems
-  
-  // useEffect(() => {
-  //   const lastAssistantMessageWithFragment = messages.findLast(
-  //     (message) => message.role === "ASSISTANT" && message.fragment,
-  //   );
 
-  //   if (!activeFragment && lastAssistantMessageWithFragment) {
-  //     setActiveFragment(lastAssistantMessageWithFragment.fragment);
-  //   }
-  // }, [activeFragment, messages, setActiveFragment]);
+  useEffect(() => {
+    const lastAssistantMessageWithFragment = messages.findLast(
+      (message) => message.role === "ASSISTANT" && message.fragment,
+    );
+
+    if (
+      lastAssistantMessageWithFragment &&
+      lastAssistantMessageWithFragment.id !== lastAssistantMessageIdRef.current
+    ) {
+      setActiveFragment(lastAssistantMessageWithFragment.fragment);
+      lastAssistantMessageIdRef.current = lastAssistantMessageWithFragment.id;
+    }
+  }, [activeFragment, messages, setActiveFragment]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView();
-  }, [messages]);
+  }, []);
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex-1 min-h-0 overflow-auto">
