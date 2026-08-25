@@ -16,11 +16,11 @@ import { ProjectHeader } from "./components/project-header";
 import { MessageContainer } from "./components/messages-container";
 import { FragmentWeb } from "./components/fragment-web";
 import { FileExplorer } from "@/components/file-explorer";
-
+import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 interface Props {
   projectId: string;
-};
+}
 
 export const ProjectView = ({ projectId }: Props) => {
   const [activeFragment, setActiveFragment] = useState<Fragment | null>(null);
@@ -46,10 +46,7 @@ export const ProjectView = ({ projectId }: Props) => {
           </Suspense>
         </ResizablePanel>
         <ResizableHandle className="hover:bg-primary transition-colors" />
-        <ResizablePanel
-          defaultSize={65}
-          minSize={50}
-        >
+        <ResizablePanel defaultSize={65} minSize={50}>
           <Tabs
             className="h-full gap-y-0"
             defaultValue="preview"
@@ -66,6 +63,17 @@ export const ProjectView = ({ projectId }: Props) => {
                 </TabsTrigger>
               </TabsList>
               <div className="ml-auto flex items-center gap-x-2">
+                <Show when="signed-out">
+                  <SignInButton mode="modal">
+                    <Button variant="ghost" size="sm">Sign in</Button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                    <Button variant="default" size="sm">Sign up</Button>
+                  </SignUpButton>
+                </Show>
+                <Show when="signed-in">
+                  <UserButton />
+                </Show>
                 <Button asChild size="sm" variant="default">
                   <Link href="/pricing">
                     <CrownIcon /> Upgrade
@@ -74,7 +82,7 @@ export const ProjectView = ({ projectId }: Props) => {
               </div>
             </div>
             <TabsContent value="preview">
-              {!!activeFragment && <FragmentWeb  data={activeFragment} />}
+              {!!activeFragment && <FragmentWeb data={activeFragment} />}
             </TabsContent>
             <TabsContent value="code" className="min-h-0">
               {!!activeFragment?.files && (

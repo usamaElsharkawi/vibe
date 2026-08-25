@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc/client";
 import { Button } from "@/components/ui/button";
 import { Form, FormField } from "@/components/ui/form";
+import { useAuth, useClerk } from "@clerk/nextjs";
 
 interface Props {
   projectId: string;
@@ -25,6 +26,8 @@ const formSchema = z.object({
 export const MessageForm = ({ projectId }: Props) => {
   const [isFocused, setIsFocused] = useState(false);
   const showUsage = false;
+  const { isSignedIn } = useAuth();
+  const { openSignIn } = useClerk();
 
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -43,19 +46,28 @@ export const MessageForm = ({ projectId }: Props) => {
         queryClient.invalidateQueries(
           trpc.messages.getMany.queryOptions({ projectId }),
         );
-      
-        //TODO:invalidate usage status 
+
+        //TODO:invalidate usage status
       },
-      onError: (error)=>{
-        //TODO Redirect to pricing page if specific error 
-        toast.error(error.message)   
-      }
+      onError: (error) => {
+        //TODO Redirect to pricing page if specific error
+        toast.error(error.message);
+        if (error.data?.code === "UNAUTHORIZED") {
+          openSignIn();
+          return;
+        }
+      },
     }),
   );
   const isPending = createMessage.isPending;
   const isButtenDisabled = isPending || !form.formState.isValid;
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
+
     await createMessage.mutateAsync({
       value: values.value,
       projectId,

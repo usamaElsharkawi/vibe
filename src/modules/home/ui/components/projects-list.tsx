@@ -7,22 +7,23 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useTRPC } from "@/trpc/client";
 import { Button } from "@/components/ui/button";
+import { useUser } from "@clerk/nextjs";
 
 export const ProjectsList = () => {
   const trpc = useTRPC();
+  const user = useUser();
   const { data: projects } = useQuery(trpc.projects.getMany.queryOptions());
+  const name = user.user?.firstName || user.user?.username;
 
   return (
     <div className="w-full bg-white dark:bg-sidebar rounded-xl p-8 border flex flex-col gap-y-6 sm:gap-y-4">
       <h2 className="text-2xl font-semibold">
-        Saved Vibes
+        {name ? `${name}'s` : "Saved"} Vibes
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {projects?.length === 0 && (
           <div className="col-span-full text-center">
-            <p className="text-sm text-muted-foreground">
-              No projects found
-            </p>
+            <p className="text-sm text-muted-foreground">No projects found</p>
           </div>
         )}
         {projects?.map((project) => (
@@ -42,9 +43,7 @@ export const ProjectsList = () => {
                   className="object-contain"
                 />
                 <div className="flex flex-col">
-                  <h3 className="truncate font-medium">
-                    {project.name}
-                  </h3>
+                  <h3 className="truncate font-medium">{project.name}</h3>
                   <p className="text-sm text-muted-foreground">
                     {formatDistanceToNow(project.updatedAt, {
                       addSuffix: true,

@@ -1,5 +1,6 @@
 import { ProjectView } from "@/modules/projects/ui/views/project-view";
 import { getQueryClient, trpc } from "@/trpc/server";
+import { auth } from "@clerk/nextjs/server";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { TRPCError } from "@trpc/server";
 import { notFound } from "next/navigation";
@@ -11,6 +12,7 @@ interface Props {
 }
 
 const Page = async ({ params }: Props) => {
+  await auth.protect();
   const { projectId } = await params;
 
   const queryClient = getQueryClient();

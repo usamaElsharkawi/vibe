@@ -2,17 +2,17 @@ import { MessageRole, MessageType } from "@/generated/prisma/enums";
 import { inngest } from "@/inngest";
 import { BUILD_PROJECT_EVENT } from "@/inngest/events";
 import prisma from "@/lib/db";
-import { baseProcedure, createTRPCRouter } from "@/trpc/init";
+import { baseProcedure, createTRPCRouter, protectedProcedure } from "@/trpc/init";
 import z from "zod";
 
 export const messageRouter = createTRPCRouter({
-  getMany: baseProcedure
+  getMany: protectedProcedure
     .input(
       z.object({
         projectId: z.string().min(1, { message: "projectId is required" }),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ input,ctx }) => {
       return prisma.message.findMany({
         where: {
           projectId: input.projectId,
@@ -26,7 +26,7 @@ export const messageRouter = createTRPCRouter({
       });
     }),
 
-  create: baseProcedure
+  create: protectedProcedure
     .input(
       z.object({
         value: z
