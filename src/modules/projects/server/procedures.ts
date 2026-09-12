@@ -3,15 +3,16 @@ import { generateSlug } from "random-word-slugs";
 import { inngest } from "@/inngest";
 import { BUILD_PROJECT_EVENT } from "@/inngest/events";
 import prisma from "@/lib/db";
-import { protectedProcedure, createTRPCRouter, } from "@/trpc/init";
+import { protectedProcedure, createTRPCRouter } from "@/trpc/init";
 import z from "zod";
 import { TRPCError } from "@trpc/server";
+import { consumeCredits } from "@/lib/usage";
 
 export const projectsRouter = createTRPCRouter({
   getOne: protectedProcedure
     .input(
       z.object({
-        id: z.string().min(1,{message:"id is required"}),
+        id: z.string().min(1, { message: "id is required" }),
       }),
     )
     .query(async ({ input }) => {
@@ -21,14 +22,17 @@ export const projectsRouter = createTRPCRouter({
         },
       });
       if (!existingProject) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
       }
       return existingProject;
     }),
-  getMany: protectedProcedure.query(async ({ctx}) => {
+  getMany: protectedProcedure.query(async ({ ctx }) => {
     return prisma.project.findMany({
-      where:{
-        userId:ctx.userId,
+      where: {
+        userId: ctx.userId,
       },
       orderBy: {
         createdAt: "asc",
@@ -45,10 +49,26 @@ export const projectsRouter = createTRPCRouter({
           .max(10000, { message: "Value is too long" }),
       }),
     )
-    .mutation(async ({ input,ctx }) => {
+    .mutation(async ({ input, ctx }) => {
+      try {
+        await consumeCredits();
+      } catch (e) {
+        if (e instanceof Error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Something went worng",
+          });
+        } else {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "You have run out of credits",
+          });
+        }
+      }
+
       const createdProject = await prisma.project.create({
         data: {
-          userId:ctx.userId,
+          userId: ctx.userId,
           name: generateSlug(2, {
             format: "kebab",
           }),

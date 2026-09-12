@@ -16,13 +16,22 @@ import { ProjectHeader } from "./components/project-header";
 import { MessageContainer } from "./components/messages-container";
 import { FragmentWeb } from "./components/fragment-web";
 import { FileExplorer } from "@/components/file-explorer";
-import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import {
+  Show,
+  SignInButton,
+  SignUpButton,
+  useAuth,
+  UserButton,
+} from "@clerk/nextjs";
 
 interface Props {
   projectId: string;
 }
 
 export const ProjectView = ({ projectId }: Props) => {
+  const { has } = useAuth();
+  const hasProAccess = has?.({ plan: "pro" });
+
   const [activeFragment, setActiveFragment] = useState<Fragment | null>(null);
   const [tabState, setTabState] = useState<"preview" | "code">("preview");
 
@@ -65,20 +74,26 @@ export const ProjectView = ({ projectId }: Props) => {
               <div className="ml-auto flex items-center gap-x-2">
                 <Show when="signed-out">
                   <SignInButton mode="modal">
-                    <Button variant="ghost" size="sm">Sign in</Button>
+                    <Button variant="ghost" size="sm">
+                      Sign in
+                    </Button>
                   </SignInButton>
                   <SignUpButton mode="modal">
-                    <Button variant="default" size="sm">Sign up</Button>
+                    <Button variant="default" size="sm">
+                      Sign up
+                    </Button>
                   </SignUpButton>
                 </Show>
                 <Show when="signed-in">
                   <UserButton />
                 </Show>
-                <Button asChild size="sm" variant="default">
-                  <Link href="/pricing">
-                    <CrownIcon /> Upgrade
-                  </Link>
-                </Button>
+                {!hasProAccess && (
+                  <Button asChild size="sm" variant="default">
+                    <Link href="/pricing">
+                      <CrownIcon /> Upgrade
+                    </Link>
+                  </Button>
+                )}
               </div>
             </div>
             <TabsContent value="preview">

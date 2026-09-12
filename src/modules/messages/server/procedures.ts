@@ -2,7 +2,13 @@ import { MessageRole, MessageType } from "@/generated/prisma/enums";
 import { inngest } from "@/inngest";
 import { BUILD_PROJECT_EVENT } from "@/inngest/events";
 import prisma from "@/lib/db";
-import { baseProcedure, createTRPCRouter, protectedProcedure } from "@/trpc/init";
+import { consumeCredits } from "@/lib/usage";
+import {
+  baseProcedure,
+  createTRPCRouter,
+  protectedProcedure,
+} from "@/trpc/init";
+import { TRPCError } from "@trpc/server";
 import z from "zod";
 
 export const messageRouter = createTRPCRouter({
@@ -12,7 +18,7 @@ export const messageRouter = createTRPCRouter({
         projectId: z.string().min(1, { message: "projectId is required" }),
       }),
     )
-    .query(async ({ input,ctx }) => {
+    .query(async ({ input, ctx }) => {
       return prisma.message.findMany({
         where: {
           projectId: input.projectId,
@@ -37,6 +43,22 @@ export const messageRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
+      try {
+        await consumeCredits();
+      } catch (e) {
+        if (e instanceof Error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Something went worng",
+          });
+        } else {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "You have run out of credits",
+          });
+        }
+      }
+
       const createdMessage = await prisma.message.create({
         data: {
           projectId: input.projectId,

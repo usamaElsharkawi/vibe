@@ -3,6 +3,7 @@ import { PROVIDERS } from "../constants/providers";
 
 export const productionPolicy: ModelPolicy = {
   name: "production",
-  // Production prefers higher-quality providers first.
-  providerOrder: [PROVIDERS.OPENAI, PROVIDERS.OPENROUTER, PROVIDERS.GOOGLE],
+  // Production uses ONLY OpenAI for reliable, high-quality code generation.
+  // No fallback providers to ensure consistent quality and performance.
+  providerOrder: [PROVIDERS.OPENAI],
 };

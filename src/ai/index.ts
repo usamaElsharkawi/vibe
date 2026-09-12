@@ -32,6 +32,14 @@ export {
   registerProvider as registerProviders,
 } from "./router/register-providers";
 
+// Export OpenRouter model fetching utilities for debugging and testing
+export {
+  fetchAndRankFreeModels,
+  clearModelCache,
+  type RankedModel,
+  type OpenRouterModel,
+} from "./utils/openrouter-model-fetcher";
+
 // Composition root: ensure the built-in providers are registered exactly once
 // when the public AI module is imported. The router itself stays pure and
 // provider-agnostic; registration lives here at the bootstrap boundary.

@@ -34,16 +34,17 @@ export default function RootLayout({
       <html lang="en" suppressHydrationWarning>
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          suppressHydrationWarning
         >
           <ClerkProvider appearance={{ theme: shadcn }}>
             <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
             >
-            <Toaster />
-            {children}
+              <Toaster />
+              {children}
             </ThemeProvider>
           </ClerkProvider>
         </body>
