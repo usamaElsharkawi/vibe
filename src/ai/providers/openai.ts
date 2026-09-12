@@ -32,6 +32,7 @@ export const openaiProvider: Provider = {
 };
 
 // Backwards-compat helper function kept so external callers don't break.
-export function createOpenAIModel() {
-  return openaiProvider.getModel()?.model ?? null;
+export async function createOpenAIModel() {
+  const result = await openaiProvider.getModel();
+  return result?.model ?? null;
 }

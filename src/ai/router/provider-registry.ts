@@ -12,7 +12,7 @@ export type Provider = {
   /** returns true if provider is configured in the environment */
   isConfigured: () => boolean;
   /** returns the provider's preferred LanguageModel and optional model ID */
-  getModel: () => ProviderResult | null;
+  getModel: () => ProviderResult | null | Promise<ProviderResult | null>;
 };
 
 const registry = new Map<string, Provider>(); 

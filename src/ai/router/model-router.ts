@@ -52,7 +52,8 @@ export class ModelRouter {
           continue;
         }
 
-        const result = prov.getModel();
+        // Handle both sync and async getModel() calls
+        const result = await prov.getModel();
         if (result) {
           return {
             model: result.model,

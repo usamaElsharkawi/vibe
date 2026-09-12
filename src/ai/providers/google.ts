@@ -30,6 +30,7 @@ export const googleProvider: Provider = {
 };
 
 // Backwards-compat helper function kept so external callers don't break.
-export function createGeminiModel() {
-  return googleProvider.getModel()?.model ?? null;
+export async function createGeminiModel() {
+  const result = await googleProvider.getModel();
+  return result?.model ?? null;
 }
