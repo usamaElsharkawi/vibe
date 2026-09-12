@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useClerk } from "@clerk/nextjs";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,15 +19,15 @@ import { Form, FormField } from "@/components/ui/form";
 import { PROJECT_TEMPLATES } from "../../constants";
 
 const formSchema = z.object({
-  value: z
-    .string()
+  value: z.string()
     .min(1, { message: "Value is required" })
     .max(10000, { message: "Value is too long" }),
-});
+})
 
 export const ProjectForm = () => {
   const router = useRouter();
   const trpc = useTRPC();
+  const clerk = useClerk();
   const queryClient = useQueryClient();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -34,21 +35,30 @@ export const ProjectForm = () => {
       value: "",
     },
   });
+  
+  const createProject = useMutation(trpc.projects.create.mutationOptions({
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(
+        trpc.projects.getMany.queryOptions(),
+      );
+      queryClient.invalidateQueries(
+        trpc.usage.status.queryOptions(),
+      );
+      router.push(`/projects/${data.id}`);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+      
+      if (error.data?.code === "UNAUTHORIZED") {
+        clerk.openSignIn();
+      }
 
-  const createProject = useMutation(
-    trpc.projects.create.mutationOptions({
-      onSuccess: (data) => {
-        queryClient.invalidateQueries(trpc.projects.getMany.queryOptions());
-        router.push(`/projects/${data.id}`);
-        // TODO: Invalidate usage status
-      },
-      onError: (error) => {
-        // TODO: Redirect to pricing page if specific error
-        toast.error(error.message);
-      },
-    }),
-  );
-
+      if (error.data?.code === "TOO_MANY_REQUESTS") {
+        router.push("/pricing");
+      }
+    },
+  }));
+  
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     await createProject.mutateAsync({
       value: values.value,
@@ -62,7 +72,7 @@ export const ProjectForm = () => {
       shouldTouch: true,
     });
   };
-
+  
   const [isFocused, setIsFocused] = useState(false);
   const isPending = createProject.isPending;
   const isButtonDisabled = isPending || !form.formState.isValid;
@@ -110,7 +120,7 @@ export const ProjectForm = () => {
               disabled={isButtonDisabled}
               className={cn(
                 "size-8 rounded-full",
-                isButtonDisabled && "bg-muted-foreground border",
+                isButtonDisabled && "bg-muted-foreground border"
               )}
             >
               {isPending ? (
@@ -123,7 +133,7 @@ export const ProjectForm = () => {
         </form>
         <div className="flex-wrap justify-center gap-2 hidden md:flex max-w-3xl">
           {PROJECT_TEMPLATES.map((template) => (
-            <Button
+            <Button 
               key={template.title}
               variant="outline"
               size="sm"
