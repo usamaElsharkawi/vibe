@@ -13,7 +13,7 @@ const Navbar = () => {
     <nav
       className={cn(
         "p-4 bg-transparent fixed left-0 right-0 z-50 trasition-all duration-200 border-b border-transparent",
-        isScrolled && "bg-side bar border-border",
+        isScrolled && "bg-sidebar border-border",
       )}
     >
       <div className="flex max-w-5xl mx-auto w-full justify-between items-center">
