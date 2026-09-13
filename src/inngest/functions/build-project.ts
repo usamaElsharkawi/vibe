@@ -1,4 +1,5 @@
 import { inngest } from "../client";
+import { generateText } from "ai";
 
 import {
   connectSandboxService,
@@ -6,8 +7,46 @@ import {
 } from "@/sandbox/e2b/sandbox-service";
 
 import { createCodingAgent } from "@/ai/agent/coding-agent";
+import { ModelRouter } from "@/ai";
 import { MessageRole, MessageType } from "@/generated/prisma/enums";
 import prisma from "@/lib/db";
+
+function generateTitle(summary: string, prompt: string): string {
+  const firstSentence = summary.split(".")[0].trim();
+  if (firstSentence.length > 0 && firstSentence.length <= 60) {
+    return firstSentence;
+  }
+  return prompt.slice(0, 50) + (prompt.length > 50 ? "..." : "");
+}
+
+async function generateResponseMessage(
+  prompt: string,
+  summary: string,
+  files: Record<string, string>,
+  sandboxUrl: string,
+): Promise<string> {
+  const modelRouter = new ModelRouter();
+  const model = await modelRouter.getModel({ environment: "development" });
+
+  const fileList = Object.keys(files).join(", ");
+
+  const { text } = await generateText({
+    model,
+    prompt: `The user asked: "${prompt}"
+
+I built this and created these files: ${fileList}
+
+Summary: ${summary}
+
+Preview URL: ${sandboxUrl}
+
+Write a friendly 2-3 sentence response explaining what was created, highlighting key features, and mentioning the preview link. Keep it conversational and encouraging.`,
+    temperature: 0.3,
+    maxOutputTokens: 200,
+  });
+
+  return text.trim();
+}
 
 export const buildProject = inngest.createFunction(
   {
@@ -28,13 +67,27 @@ export const buildProject = inngest.createFunction(
       return sandbox.sandboxId;
     });
 
+    const previousMessages = await step.run("fetch-history", async () => {
+      const msgs = await prisma.message.findMany({
+        where: { projectId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+      return msgs.reverse();
+    });
+
     const result = await step.run("run-coding-agent", async () => {
       const sandbox = await connectSandboxService(sandboxId);
 
       const { agent, context } = await createCodingAgent(sandbox);
 
+      const history = previousMessages.map((m) => ({
+        role: m.role.toLowerCase() as "user" | "assistant",
+        content: m.content,
+      }));
+
       const response = await agent.generate({
-        prompt,
+        messages: [...history, { role: "user", content: prompt }],
       });
 
       const summaryMatch = response.text.match(
@@ -68,16 +121,24 @@ export const buildProject = inngest.createFunction(
         });
       }
 
+      const title = generateTitle(result.summary, prompt);
+      const responseContent = await generateResponseMessage(
+        prompt,
+        result.summary,
+        result.files,
+        sandboxUrl,
+      );
+
       return prisma.message.create({
         data: {
           projectId: projectId,
-          content: result.summary,
+          content: responseContent,
           role: MessageRole.ASSISTANT,
           type: MessageType.RESULT,
           fragment: {
             create: {
               sandboxUrl,
-              title: "Fragment",
+              title,
               files: result.files,
             },
           },
