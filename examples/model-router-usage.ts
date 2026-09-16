@@ -6,6 +6,7 @@
  */
 
 import { generateText, streamText } from "ai";
+import { z } from "zod";
 import { ModelRouter } from "@/ai";
 
 // ============================================================
@@ -201,13 +202,9 @@ async function withToolCalling() {
     tools: {
       getWeather: {
         description: "Get the weather for a location",
-        parameters: {
-          type: "object",
-          properties: {
-            location: { type: "string" },
-          },
-          required: ["location"],
-        },
+        inputSchema: z.object({
+          location: z.string(),
+        }),
         execute: async ({ location }) => {
           // Your weather API logic
           return { temperature: 72, condition: "sunny" };

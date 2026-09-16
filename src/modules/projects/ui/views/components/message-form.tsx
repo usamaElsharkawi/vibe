@@ -17,13 +17,14 @@ import { Usage } from "./usage";
 
 interface Props {
   projectId: string;
-};
+}
 
 const formSchema = z.object({
-  value: z.string()
+  value: z
+    .string()
     .min(1, { message: "Value is required" })
     .max(10000, { message: "Value is too long" }),
-})
+});
 
 export const MessageForm = ({ projectId }: Props) => {
   const trpc = useTRPC();
@@ -38,33 +39,33 @@ export const MessageForm = ({ projectId }: Props) => {
       value: "",
     },
   });
-  
-  const createMessage = useMutation(trpc.messages.create.mutationOptions({
-    onSuccess: () => {
-      form.reset();
-      queryClient.invalidateQueries(
-        trpc.messages.getMany.queryOptions({ projectId }),
-      );
-      queryClient.invalidateQueries(
-        trpc.usage.status.queryOptions()
-      );
-    },
-    onError: (error) => {
-      toast.error(error.message);
 
-      if (error.data?.code === "TOO_MANY_REQUESTS") {
-        router.push("/pricing");
-      }
-    },
-  }));
-  
+  const createMessage = useMutation(
+    trpc.messages.create.mutationOptions({
+      onSuccess: () => {
+        form.reset();
+        queryClient.invalidateQueries(
+          trpc.messages.getMany.queryOptions({ projectId }),
+        );
+        queryClient.invalidateQueries(trpc.usage.status.queryOptions());
+      },
+      onError: (error) => {
+        toast.error(error.message);
+
+        if (error.data?.code === "TOO_MANY_REQUESTS") {
+          router.push("/pricing");
+        }
+      },
+    }),
+  );
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     await createMessage.mutateAsync({
       value: values.value,
       projectId,
     });
   };
-  
+
   const [isFocused, setIsFocused] = useState(false);
   const isPending = createMessage.isPending;
   const isButtonDisabled = isPending || !form.formState.isValid;
@@ -119,7 +120,7 @@ export const MessageForm = ({ projectId }: Props) => {
             disabled={isButtonDisabled}
             className={cn(
               "size-8 rounded-full",
-              isButtonDisabled && "bg-muted-foreground border"
+              isButtonDisabled && "bg-muted-foreground border",
             )}
           >
             {isPending ? (

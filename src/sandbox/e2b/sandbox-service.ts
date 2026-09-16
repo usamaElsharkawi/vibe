@@ -15,9 +15,7 @@ function normalizePath(path: string): string {
     throw new SandboxPathError(path);
   }
 
-  const normalized = path.startsWith("/")
-    ? path
-    : `${WORKSPACE_ROOT}/${path}`;
+  const normalized = path.startsWith("/") ? path : `${WORKSPACE_ROOT}/${path}`;
 
   const absolute = new URL(normalized, "file:///").pathname;
 
@@ -64,16 +62,14 @@ export class E2BSandboxService implements ISandboxService {
       throw new Error("Command cannot be empty");
     }
 
-    const result = await this.sandbox.commands.run(command);
+    const result = await this.sandbox.commands.run(command, {
+      background: true,
+    });
 
     const exitCode = result.exitCode ?? 0;
 
     if (exitCode !== 0) {
-      throw new SandboxCommandError(
-        command,
-        exitCode,
-        result.stderr ?? "",
-      );
+      throw new SandboxCommandError(command, exitCode, result.stderr ?? "");
     }
 
     return {
@@ -98,10 +94,8 @@ export async function createSandboxService() {
   return new E2BSandboxService(sandbox);
 }
 
+export async function connectSandboxService(sandboxId: string) {
+  const sandbox = await Sandbox.connect(sandboxId);
 
-
-export async function connectSandboxService(sandboxId:string){
-  const sandbox =  await Sandbox.connect(sandboxId);
-
-  return new E2BSandboxService(sandbox)
+  return new E2BSandboxService(sandbox);
 }

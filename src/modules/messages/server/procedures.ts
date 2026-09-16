@@ -22,6 +22,7 @@ export const messageRouter = createTRPCRouter({
       return prisma.message.findMany({
         where: {
           projectId: input.projectId,
+          project: { userId: ctx.userId },
         },
         orderBy: {
           createdAt: "asc",
@@ -42,7 +43,17 @@ export const messageRouter = createTRPCRouter({
         projectId: z.string().min(1, { message: "projectId is required" }),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const project = await prisma.project.findUnique({
+        where: { id: input.projectId, userId: ctx.userId },
+      });
+      if (!project) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      }
+
       try {
         await consumeCredits();
       } catch (e) {
@@ -57,9 +68,14 @@ export const messageRouter = createTRPCRouter({
             message: "You have run out of credits",
           });
         }
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Something went wrong. Please try again later.",
+        });
       }
 
-      const createdMessage = await prisma.message.create({
+      const result = await prisma.message.create({
         data: {
           projectId: input.projectId,
           content: input.value,
@@ -77,6 +93,6 @@ export const messageRouter = createTRPCRouter({
         },
       });
 
-      return createdMessage;
+      return result;
     }),
 });

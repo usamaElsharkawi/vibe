@@ -60,5 +60,6 @@ model Fragment {
 model Usage {
   key    String   @id
   points Int
-  expire DateTime
+  // RateLimiterPrisma uses a null expiry for records that do not expire.
+  expire DateTime?
 }
