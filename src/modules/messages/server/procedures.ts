@@ -3,11 +3,7 @@ import { inngest } from "@/inngest";
 import { BUILD_PROJECT_EVENT } from "@/inngest/events";
 import prisma from "@/lib/db";
 import { consumeCredits } from "@/lib/usage";
-import {
-  baseProcedure,
-  createTRPCRouter,
-  protectedProcedure,
-} from "@/trpc/init";
+import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
 import { TRPCError } from "@trpc/server";
 import z from "zod";
 

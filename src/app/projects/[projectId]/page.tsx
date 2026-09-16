@@ -11,6 +11,15 @@ interface Props {
   }>;
 }
 
+function hasErrorCode(error: unknown, code: string): error is { code: string } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === code
+  );
+}
+
 const Page = async ({ params }: Props) => {
   await auth.protect();
   const { projectId } = await params;
@@ -26,7 +35,7 @@ const Page = async ({ params }: Props) => {
   } catch (error) {
     if (
       (error instanceof TRPCError && error.code === "NOT_FOUND") ||
-      (error instanceof Error && (error as any).code === "NOT_FOUND")
+      (error instanceof Error && hasErrorCode(error, "NOT_FOUND"))
     ) {
       notFound();
     }
