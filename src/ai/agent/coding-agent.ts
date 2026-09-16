@@ -15,11 +15,12 @@ export async function createCodingAgent(sandbox: E2BSandboxService) {
     files: {},
   };
 
-  const tools = createCodingTools(sandbox,context);
+  const tools = createCodingTools(sandbox, context);
 
   const modelRouter = new ModelRouter();
   const model = await modelRouter.getModel({
-    environment: ENVIRONMENTS.DEVELOPMENT,
+    environment:
+      process.env.NODE_ENV === "production" ? ENVIRONMENTS.PRODUCTION : ENVIRONMENTS.DEVELOPMENT,
   });
 
   const agent = new ToolLoopAgent({
@@ -54,6 +55,6 @@ export async function createCodingAgent(sandbox: E2BSandboxService) {
 
   return {
     agent,
-    context
-  }
+    context,
+  };
 }

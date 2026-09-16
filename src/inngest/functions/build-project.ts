@@ -10,6 +10,7 @@ import { createCodingAgent } from "@/ai/agent/coding-agent";
 import { ModelRouter } from "@/ai";
 import { MessageRole, MessageType } from "@/generated/prisma/enums";
 import prisma from "@/lib/db";
+import { ENVIRONMENTS } from "@/ai/constants/environment";
 
 function generateTitle(summary: string, prompt: string): string {
   const firstSentence = summary.split(".")[0].trim();
@@ -23,10 +24,14 @@ async function generateResponseMessage(
   prompt: string,
   summary: string,
   files: Record<string, string>,
-  sandboxUrl: string,
 ): Promise<string> {
   const modelRouter = new ModelRouter();
-  const model = await modelRouter.getModel({ environment: "development" });
+  const model = await modelRouter.getModel({
+    environment:
+      process.env.NODE_ENV === "production"
+        ? ENVIRONMENTS.PRODUCTION
+        : ENVIRONMENTS.DEVELOPMENT,
+  });
 
   const fileList = Object.keys(files).join(", ");
 
@@ -38,9 +43,8 @@ I built this and created these files: ${fileList}
 
 Summary: ${summary}
 
-Preview URL: ${sandboxUrl}
 
-Write a friendly 2-3 sentence response explaining what was created, highlighting key features, and mentioning the preview link. Keep it conversational and encouraging.`,
+Write a friendly 2-3 sentence response explaining what was created, highlighting key features. Keep it conversational and encouraging.`,
     temperature: 0.3,
     maxOutputTokens: 200,
   });
@@ -71,7 +75,7 @@ export const buildProject = inngest.createFunction(
       const msgs = await prisma.message.findMany({
         where: { projectId },
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 10,
       });
       return msgs.reverse();
     });
@@ -102,6 +106,27 @@ export const buildProject = inngest.createFunction(
       };
     });
 
+    const healthCheck = await step.run("check-server", async () => {
+      const sandbox = await connectSandboxService(sandboxId);
+      try {
+        const result = await sandbox.runCommand(
+          'node -e \'require("http").get("http://localhost:3000", res => { console.log(res.statusCode); process.exit(0); }).on("error", () => { console.log("000"); process.exit(0); });\'',
+        );
+        return result.stdout.trim();
+      } catch {
+        return "000";
+      }
+    });
+
+    if (healthCheck !== "200") {
+      await step.run("start-server", async () => {
+        const sandbox = await connectSandboxService(sandboxId);
+        await sandbox.runCommand("cd /home/user && npx next dev --turbopack");
+        // Wait for server to start
+        await new Promise((resolve) => setTimeout(resolve, 30000));
+      });
+    }
+
     const sandboxUrl = await step.run("get-sandbox-url", async () => {
       const sandbox = await connectSandboxService(sandboxId);
       return sandbox.getPreviewUrl(3000);
@@ -126,7 +151,6 @@ export const buildProject = inngest.createFunction(
         prompt,
         result.summary,
         result.files,
-        sandboxUrl,
       );
 
       return prisma.message.create({

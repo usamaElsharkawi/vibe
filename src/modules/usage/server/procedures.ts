@@ -5,8 +5,13 @@ export const usageRouter = createTRPCRouter({
   status: protectedProcedure.query(async () => {
     try {
       const result = await getUsageStatus();
+
       return result;
-    } catch (e) {
+    } catch (error) {
+      console.error(
+        "[usage] status request failed",
+        error instanceof Error ? error.message : error,
+      );
       return null;
     }
   }),

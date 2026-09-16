@@ -18,7 +18,7 @@ const Page = async ({ params }: Props) => {
   const queryClient = getQueryClient();
 
   try {
-    await queryClient.fetchQuery(
+    await queryClient.query(
       trpc.projects.getOne.queryOptions({
         id: projectId,
       }),
@@ -33,11 +33,13 @@ const Page = async ({ params }: Props) => {
     throw error;
   }
 
-  await queryClient.prefetchQuery(
+  await queryClient.query(
     trpc.messages.getMany.queryOptions({
       projectId,
     }),
   );
+
+  await queryClient.query(trpc.usage.status.queryOptions());
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

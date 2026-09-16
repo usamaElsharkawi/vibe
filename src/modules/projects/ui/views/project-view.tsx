@@ -23,6 +23,7 @@ import {
   useAuth,
   UserButton,
 } from "@clerk/nextjs";
+import { ErrorBoundary } from "next/dist/client/components/error-boundary";
 
 interface Props {
   projectId: string;
@@ -43,16 +44,22 @@ export const ProjectView = ({ projectId }: Props) => {
           minSize={20}
           className="flex flex-col min-h-0"
         >
-          <Suspense fallback={<p>Loading project...</p>}>
-            <ProjectHeader projectId={projectId} />
-          </Suspense>
-          <Suspense fallback={<p>Loading messages...</p>}>
-            <MessageContainer
-              projectId={projectId}
-              activeFragment={activeFragment}
-              setActiveFragment={setActiveFragment}
-            />
-          </Suspense>
+          <ErrorBoundary
+            errorComponent={() => <p>Failed to load project header</p>}
+          >
+            <Suspense fallback={<p>Loading project...</p>}>
+              <ProjectHeader projectId={projectId} /> 
+            </Suspense>
+          </ErrorBoundary>
+            <ErrorBoundary errorComponent={() => <p>Failed to load messages</p>}>
+            <Suspense fallback={<p>Loading messages...</p>}>
+              <MessageContainer
+                projectId={projectId}
+                activeFragment={activeFragment}
+                setActiveFragment={setActiveFragment}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </ResizablePanel>
         <ResizableHandle className="hover:bg-primary transition-colors" />
         <ResizablePanel defaultSize={65} minSize={50}>
